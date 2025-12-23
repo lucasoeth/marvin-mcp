@@ -245,6 +245,7 @@ export class MarvinAPI {
       method: "POST",
       body: {
         itemId: id,
+        timeZoneOffset: new Date().getTimezoneOffset(),
         setters: updates,
       },
       useFullAccess: true,
@@ -362,10 +363,10 @@ export class MarvinAPI {
           this.getDueTasks(),
           this.getCategories(),
         ]);
-        
+
         const allTasks = [...today, ...due];
         const seen = new Set<string>();
-        
+
         return allTasks.filter((task) => {
           if (seen.has(task._id)) return false;
           seen.add(task._id);
@@ -416,7 +417,7 @@ export class MarvinAPI {
 
     // Get all items from categories recursively
     const allItems: any[] = [];
-    
+
     // Helper to recursively get all children
     const getChildrenRecursive = async (parentId: string): Promise<void> => {
       try {
