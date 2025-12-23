@@ -52,3 +52,12 @@ export interface UpdateProjectArgs {
   day?: string;
   dueDate?: string;
 }
+
+/**
+ * Arguments for creating a category
+ */
+export interface CreateCategoryArgs {
+  title: string;
+  parentId?: string;
+  color?: string;
+}

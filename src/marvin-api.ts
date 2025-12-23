@@ -10,6 +10,7 @@ const API_BASE = "https://serv.amazingmarvin.com/api";
 export interface MarvinTask {
   _id: string;
   title: string;
+  db?: "Tasks"; // Should be "Tasks" for tasks
   done?: boolean;
   day?: string;
   dueDate?: string;
@@ -25,13 +26,15 @@ export interface MarvinTask {
   rewardId?: string;
   // Priority: 1=yellow, 2=orange, 3=red (or true from old version)
   isStarred?: number | boolean;
-  // Document type
-  db?: string;
+  // Eat the frog: 1=normal, 2=baby, 3=monster
+  isFrogged?: number;
 }
 
 export interface MarvinProject {
   _id: string;
   title: string;
+  db?: "Categories"; // Projects have db="Categories"
+  type?: "project"; // And type="project"
   parentId?: string;
   priority?: "high" | "mid" | "low";
   done?: boolean;
@@ -39,12 +42,16 @@ export interface MarvinProject {
   dueDate?: string;
   createdAt?: number;
   updatedAt?: number;
+  color?: string;
+  icon?: string;
+  isFrogged?: number;
 }
 
 export interface MarvinCategory {
   _id: string;
   title: string;
-  type?: "category" | "project";
+  db?: "Categories"; // Categories have db="Categories"
+  type?: string; // Categories don't have type="project"
   parentId?: string;
   color?: string;
   createdAt?: number;
@@ -82,6 +89,36 @@ export interface CreateProjectOptions {
   priority?: "high" | "mid" | "low";
   day?: string;
   dueDate?: string;
+}
+
+export interface CreateCategoryOptions {
+  title: string;
+  parentId?: string;
+  color?: string;
+}
+
+/**
+ * Type guard to check if an item is a Task
+ * Tasks have db="Tasks"
+ */
+export function isTask(item: MarvinTask | MarvinProject | MarvinCategory | any): item is MarvinTask {
+  return item?.db === "Tasks";
+}
+
+/**
+ * Type guard to check if an item is a Project
+ * Projects have db="Categories" AND type="project"
+ */
+export function isProject(item: MarvinTask | MarvinProject | MarvinCategory | any): item is MarvinProject {
+  return item?.db === "Categories" && item?.type === "project";
+}
+
+/**
+ * Type guard to check if an item is a Category
+ * Categories have db="Categories" AND no type field (or type !== "project")
+ */
+export function isCategory(item: MarvinTask | MarvinProject | MarvinCategory | any): item is MarvinCategory {
+  return item?.db === "Categories" && item?.type !== "project";
 }
 
 export class MarvinAPI {
@@ -265,6 +302,24 @@ export class MarvinAPI {
     return this.request<MarvinCategory[]>("/categories");
   }
 
+  /**
+   * Create a new category
+   */
+  async createCategory(options: CreateCategoryOptions): Promise<MarvinCategory> {
+    const payload: Record<string, unknown> = {
+      title: options.title,
+      timeZoneOffset: new Date().getTimezoneOffset(),
+    };
+
+    if (options.parentId) payload.parentId = options.parentId;
+    if (options.color) payload.color = options.color;
+
+    return this.request<MarvinCategory>("/addCategory", {
+      method: "POST",
+      body: payload,
+    });
+  }
+
   // ============ Label Operations ============
 
   /**
@@ -287,26 +342,36 @@ export class MarvinAPI {
 
   /**
    * Get inbox tasks (tasks without a parent category/project)
-   * Tries root as parent, falls back to aggregating unparented tasks
+   * Returns tasks that are not assigned to any category or project
    */
   async getInboxTasks(): Promise<MarvinTask[]> {
     try {
-      // Try getting children of root
-      const items = await this.request<MarvinTask[]>("/children?parentId=root");
-      return items.filter((item) => item.db === "Tasks" || !item.db);
+      // Try getting children of "unassigned" (inbox)
+      const items = await this.request<any[]>("/children?parentId=unassigned");
+      // Filter to only include tasks (db="Tasks")
+      return items.filter(isTask);
     } catch {
-      // Fallback: get today + due items and filter those without parentId
-      const [today, due] = await Promise.all([
-        this.getTodayTasks(),
-        this.getDueTasks(),
-      ]);
-      const allTasks = [...today, ...due];
-      const seen = new Set<string>();
-      return allTasks.filter((task) => {
-        if (seen.has(task._id)) return false;
-        seen.add(task._id);
-        return !task.parentId || task.parentId === "root";
-      });
+      // Fallback: Try root
+      try {
+        const items = await this.request<any[]>("/children?parentId=root");
+        return items.filter(isTask);
+      } catch {
+        // Final fallback: aggregate from all sources and filter unparented
+        const [today, due, categories] = await Promise.all([
+          this.getTodayTasks(),
+          this.getDueTasks(),
+          this.getCategories(),
+        ]);
+        
+        const allTasks = [...today, ...due];
+        const seen = new Set<string>();
+        
+        return allTasks.filter((task) => {
+          if (seen.has(task._id)) return false;
+          seen.add(task._id);
+          return !task.parentId || task.parentId === "root" || task.parentId === "unassigned";
+        });
+      }
     }
   }
 
@@ -320,43 +385,17 @@ export class MarvinAPI {
   }
 
   /**
-   * Search tasks by title (aggregates from multiple sources)
+   * Search tasks by title and notes (aggregates from multiple sources)
    * Note: This is client-side filtering due to API limitations
    */
   async searchTasks(query: string): Promise<MarvinTask[]> {
     const lowerQuery = query.toLowerCase();
 
-    // Aggregate tasks from available sources
-    const [today, due, categories] = await Promise.all([
-      this.getTodayTasks(),
-      this.getDueTasks(),
-      this.getCategories(),
-    ]);
-
-    // Get children of all categories
-    const categoryChildren = await Promise.all(
-      categories.map((cat) =>
-        this.getChildren(cat._id).catch(() => [] as MarvinTask[])
-      )
-    );
-
-    // Combine all tasks
-    const allTasks: MarvinTask[] = [
-      ...today,
-      ...due,
-      ...categoryChildren.flat(),
-    ];
-
-    // Deduplicate by ID
-    const seen = new Set<string>();
-    const uniqueTasks = allTasks.filter((task) => {
-      if (seen.has(task._id)) return false;
-      seen.add(task._id);
-      return true;
-    });
+    // Get all tasks first
+    const allTasks = await this.getAllTasks();
 
     // Filter by query
-    return uniqueTasks.filter(
+    return allTasks.filter(
       (task) =>
         task.title?.toLowerCase().includes(lowerQuery) ||
         task.note?.toLowerCase().includes(lowerQuery)
@@ -364,28 +403,50 @@ export class MarvinAPI {
   }
 
   /**
-   * Get all tasks (aggregates from multiple sources)
+   * Get all tasks recursively from all sources
    * Note: May not include all tasks due to API limitations
    */
   async getAllTasks(): Promise<MarvinTask[]> {
-    const [today, due, categories] = await Promise.all([
+    const [today, due, categories, inbox] = await Promise.all([
       this.getTodayTasks(),
       this.getDueTasks(),
       this.getCategories(),
+      this.getInboxTasks().catch(() => []),
     ]);
 
-    // Get children of all categories
-    const categoryChildren = await Promise.all(
-      categories.map((cat) =>
-        this.getChildren(cat._id).catch(() => [] as MarvinTask[])
-      )
+    // Get all items from categories recursively
+    const allItems: any[] = [];
+    
+    // Helper to recursively get all children
+    const getChildrenRecursive = async (parentId: string): Promise<void> => {
+      try {
+        const children = await this.getChildren(parentId);
+        for (const child of children) {
+          allItems.push(child);
+          // If it's a project (db="Categories" AND type="project"), recurse into it
+          if (isProject(child)) {
+            await getChildrenRecursive(child._id);
+          }
+        }
+      } catch {
+        // Ignore errors for individual categories
+      }
+    };
+
+    // Get children from all categories recursively
+    await Promise.all(
+      categories.map((cat) => getChildrenRecursive(cat._id))
     );
+
+    // Filter to only include tasks (db="Tasks")
+    const tasksFromCategories = allItems.filter(isTask);
 
     // Combine all tasks
     const allTasks: MarvinTask[] = [
       ...today,
       ...due,
-      ...categoryChildren.flat(),
+      ...inbox,
+      ...tasksFromCategories,
     ];
 
     // Deduplicate by ID

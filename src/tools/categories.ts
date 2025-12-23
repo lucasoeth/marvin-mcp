@@ -20,6 +20,29 @@ export const categoryTools: Tool[] = [
       properties: {},
     },
   },
+  {
+    name: "marvin_create_category",
+    description:
+      "Create a new category in Amazing Marvin. Categories are organizational containers for tasks and projects.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: {
+          type: "string",
+          description: "Category title",
+        },
+        parentId: {
+          type: "string",
+          description: "ID of parent category for nesting (optional)",
+        },
+        color: {
+          type: "string",
+          description: "Category color (optional)",
+        },
+      },
+      required: ["title"],
+    },
+  },
 ];
 
 /**
@@ -34,6 +57,17 @@ export class CategoryHandlers {
       async () => {
         const categories = await this.marvin.getCategories();
         return formatList(categories, formatCategory, "Organizational Hierarchy (Categories & Projects)", "No items found.");
+      },
+      (result) => result
+    );
+  }
+
+  async createCategory(args: { title: string; parentId?: string; color?: string }): Promise<CallToolResult> {
+    return handleToolExecution(
+      "create category",
+      async () => {
+        const category = await this.marvin.createCategory(args);
+        return formatCategory(category);
       },
       (result) => result
     );

@@ -19,7 +19,7 @@ import { projectTools, ProjectHandlers } from "./tools/projects.js";
 import { categoryTools, CategoryHandlers } from "./tools/categories.js";
 import { labelTools, LabelHandlers } from "./tools/labels.js";
 import { accountTools, AccountHandlers } from "./tools/account.js";
-import { CreateTaskArgs, UpdateTaskArgs, CreateProjectArgs, UpdateProjectArgs } from "./types/tools.js";
+import { CreateTaskArgs, UpdateTaskArgs, CreateProjectArgs, UpdateProjectArgs, CreateCategoryArgs } from "./types/tools.js";
 import { createErrorResponse } from "./utils/errors.js";
 
 // Environment variables for authentication
@@ -116,6 +116,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // ============ Category Handlers ============
       case "marvin_get_hierarchy":
         return await categoryHandlers.getCategories();
+      case "marvin_create_category":
+        return await categoryHandlers.createCategory(args as unknown as CreateCategoryArgs);
 
       // ============ Label Handlers ============
       case "marvin_get_labels":
