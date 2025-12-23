@@ -237,16 +237,24 @@ export class MarvinAPI {
   /**
    * Update a document (requires full access)
    */
+  /**
+   * Update a document (requires full access)
+   */
   async updateDocument(
     id: string,
     updates: Record<string, unknown>
   ): Promise<void> {
+    // Convert updates object to array of {key, val} pairs
+    const setters = Object.entries(updates).map(([key, val]) => ({
+      key,
+      val,
+    }));
+
     await this.request("/doc/update", {
       method: "POST",
       body: {
         itemId: id,
-        timeZoneOffset: new Date().getTimezoneOffset(),
-        setters: updates,
+        setters,
       },
       useFullAccess: true,
     });
