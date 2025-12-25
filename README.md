@@ -33,6 +33,15 @@ An MCP (Model Context Protocol) server for [Amazing Marvin](https://amazingmarvi
 
 ## Setup
 
+### Choose Your Deployment Method
+
+This MCP server can be run in two modes:
+
+1. **Local Mode** (stdio) - Run directly on your machine for personal use
+2. **Remote Mode** (HTTP) - Deploy to the internet for access from anywhere
+
+#### Local Mode (Quick Start)
+
 ### 1. Get Your Amazing Marvin API Tokens
 
 1. Open Amazing Marvin desktop or web app
@@ -87,6 +96,54 @@ For Claude Code, add to your settings:
   }
 }
 ```
+
+#### Remote Mode (Deploy to Internet)
+
+Want to access your Marvin MCP server from anywhere? Deploy it as a remote HTTP server!
+
+**See the complete guide:** [REMOTE_DEPLOYMENT.md](./REMOTE_DEPLOYMENT.md)
+
+**Quick overview:**
+- Deploy to Coolify, Heroku, Google Cloud Run, or any platform
+- Multi-user support with Bearer token authentication
+- Access from multiple devices and platforms
+- Built-in session management and security
+
+**Quick start with Coolify:**
+```bash
+# 1. Push to Git
+git push origin main
+
+# 2. Configure in Coolify:
+#    - Port: 3000
+#    - Health check: /health
+#    - Set environment variables
+
+# 3. Deploy and get your server URL
+```
+
+**Connect to remote server:**
+```json
+{
+  "mcpServers": {
+    "marvin-remote": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://your-server.com/mcp",
+        "--header",
+        "Authorization:Bearer ${MARVIN_MCP_TOKEN}"
+      ],
+      "env": {
+        "MARVIN_MCP_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+For detailed instructions on deployment, security setup, and configuration, see [REMOTE_DEPLOYMENT.md](./REMOTE_DEPLOYMENT.md).
 
 ## Available Tools (19 total)
 
@@ -168,15 +225,28 @@ Tasks support two priority systems:
 ## Development
 
 ```bash
-# Watch mode for development
+# Watch mode for development (local stdio mode)
 npm run dev
 
 # Build for production
 npm run build
 
-# Run the server directly
+# Run the local stdio server
 npm start
+
+# Run the remote HTTP server (for testing remote mode locally)
+npm run start:remote
 ```
+
+## Files and Structure
+
+- `src/index.ts` - Local stdio MCP server
+- `src/remote-server.ts` - Remote HTTP MCP server
+- `src/tools/` - Tool implementations (tasks, projects, categories, labels, account)
+- `src/marvin-api.ts` - Amazing Marvin API client
+- `nixpacks.toml` - Coolify/nixpacks deployment configuration
+- `Dockerfile` - Docker deployment configuration
+- `REMOTE_DEPLOYMENT.md` - Complete remote deployment guide
 
 ## License
 
