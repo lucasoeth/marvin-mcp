@@ -4,8 +4,7 @@
  * Amazing Marvin Remote MCP Server
  *
  * A remote HTTP server that exposes the Marvin MCP tools over the internet
- * using Streamable HTTP transport. Supports multiple concurrent users with
- * session management and authentication.
+ * using Streamable HTTP transport. Simple single-user setup.
  */
 
 import express from "express";
@@ -37,20 +36,21 @@ const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || "development";
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(",") || ["*"];
 
-// User credentials mapping - in production, use a database
-interface UserCredentials {
-  apiToken: string;
-  fullAccessToken: string;
-  userId: string;
-}
+// Marvin API credentials (single-user mode)
+const MARVIN_API_TOKEN = process.env.MARVIN_API_TOKEN;
+const MARVIN_FULL_ACCESS_TOKEN = process.env.MARVIN_FULL_ACCESS_TOKEN;
+const API_KEY = process.env.API_KEY; // Optional API key for authentication
 
-// Simple in-memory token store - replace with database in production
-const authorizedTokens = new Map<string, UserCredentials>();
+// Validate required credentials
+if (!MARVIN_API_TOKEN || !MARVIN_FULL_ACCESS_TOKEN) {
+  console.error("Error: Missing required environment variables.");
+  console.error("Please set MARVIN_API_TOKEN and MARVIN_FULL_ACCESS_TOKEN");
+  process.exit(1);
+}
 
 // Session management
 interface Session {
   sessionId: string;
-  userId: string;
   transport: StreamableHTTPServerTransport;
   server: McpServer;
   createdAt: Date;
@@ -94,36 +94,46 @@ app.use((req, res, next) => {
   next();
 });
 
-// Authentication middleware
+// Authentication middleware (optional - only if API_KEY is set)
 async function authenticate(
   req: express.Request,
   res: express.Response,
   next: express.NextFunction
 ) {
-  const authHeader = req.headers["authorization"];
+  // If no API_KEY is set, allow all requests
+  if (!API_KEY) {
+    return next();
+  }
 
-  if (!authHeader?.startsWith("Bearer ")) {
+  // Check for API key in Authorization header (Bearer token) or X-API-Key header
+  const authHeader = req.headers["authorization"];
+  const apiKeyHeader = req.headers["x-api-key"] as string;
+
+  let providedKey: string | undefined;
+
+  if (authHeader?.startsWith("Bearer ")) {
+    providedKey = authHeader.substring(7);
+  } else if (apiKeyHeader) {
+    providedKey = apiKeyHeader;
+  }
+
+  if (!providedKey) {
     return res
       .status(401)
       .header("WWW-Authenticate", 'Bearer realm="Marvin MCP Server"')
       .json({
         error: "Missing authentication",
-        message: "Please provide a Bearer token in the Authorization header",
+        message: "Please provide an API key in the Authorization header or X-API-Key header",
       });
   }
 
-  const token = authHeader.substring(7);
-  const userCreds = authorizedTokens.get(token);
-
-  if (!userCreds) {
+  if (providedKey !== API_KEY) {
     return res.status(401).json({
-      error: "Invalid token",
-      message: "The provided authentication token is not valid",
+      error: "Invalid API key",
+      message: "The provided API key is not valid",
     });
   }
 
-  // Attach user credentials to request
-  (req as any).userCredentials = userCreds;
   next();
 }
 
@@ -151,13 +161,10 @@ const allTools = [
 ];
 
 /**
- * Factory function to create an MCP server instance for a user
+ * Factory function to create an MCP server instance
  */
-function createMcpServerForUser(
-  apiToken: string,
-  fullAccessToken: string
-): McpServer {
-  const marvin = new MarvinAPI(apiToken, fullAccessToken);
+function createMcpServer(): McpServer {
+  const marvin = new MarvinAPI(MARVIN_API_TOKEN!, MARVIN_FULL_ACCESS_TOKEN!);
 
   // Initialize handlers
   const taskHandlers = new TaskHandlers(marvin);
@@ -270,7 +277,6 @@ function createMcpServerForUser(
  * POST /mcp - Main MCP endpoint for requests
  */
 app.post("/mcp", authenticate, async (req, res) => {
-  const userCreds = (req as any).userCredentials as UserCredentials;
   const sessionIdHeader = req.headers["mcp-session-id"] as string | undefined;
   const body = req.body;
 
@@ -294,12 +300,9 @@ app.post("/mcp", authenticate, async (req, res) => {
         id: body?.id,
       });
     } else {
-      // New session - create MCP server instance for this user
+      // New session - create MCP server instance
       const sessionId = uuidv4();
-      const mcpServer = createMcpServerForUser(
-        userCreds.apiToken,
-        userCreds.fullAccessToken
-      );
+      const mcpServer = createMcpServer();
 
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => sessionId,
@@ -309,7 +312,6 @@ app.post("/mcp", authenticate, async (req, res) => {
 
       session = {
         sessionId,
-        userId: userCreds.userId,
         transport,
         server: mcpServer,
         createdAt: new Date(),
@@ -318,9 +320,7 @@ app.post("/mcp", authenticate, async (req, res) => {
 
       sessions.set(sessionId, session);
 
-      console.log(
-        `Created new session ${sessionId} for user ${userCreds.userId}`
-      );
+      console.log(`Created new session ${sessionId}`);
     }
 
     // Handle the request through the transport
@@ -369,7 +369,6 @@ app.get("/mcp", authenticate, async (req, res) => {
  */
 app.delete("/sessions/:sessionId", authenticate, async (req, res) => {
   const { sessionId } = req.params;
-  const userCreds = (req as any).userCredentials as UserCredentials;
 
   if (!sessions.has(sessionId)) {
     return res.status(404).json({
@@ -380,21 +379,11 @@ app.delete("/sessions/:sessionId", authenticate, async (req, res) => {
 
   const session = sessions.get(sessionId)!;
 
-  // Verify user owns this session
-  if (session.userId !== userCreds.userId) {
-    return res.status(403).json({
-      error: "Forbidden",
-      message: "You do not have permission to delete this session",
-    });
-  }
-
   // Close the session
   try {
     await session.transport.close();
     sessions.delete(sessionId);
-    console.log(
-      `Session ${sessionId} terminated by user ${userCreds.userId}`
-    );
+    console.log(`Session ${sessionId} terminated`);
     res.status(204).end();
   } catch (error) {
     console.error("Error closing session:", error);
@@ -421,61 +410,13 @@ app.get("/health", (req, res) => {
  * GET /stats - Statistics endpoint (authenticated)
  */
 app.get("/stats", authenticate, (req, res) => {
-  const userCreds = (req as any).userCredentials as UserCredentials;
-
-  // Get user's sessions
-  const userSessions = Array.from(sessions.values()).filter(
-    (s) => s.userId === userCreds.userId
-  );
-
   res.json({
-    userId: userCreds.userId,
-    activeSessions: userSessions.length,
-    sessions: userSessions.map((s) => ({
+    activeSessions: sessions.size,
+    sessions: Array.from(sessions.values()).map((s) => ({
       sessionId: s.sessionId,
       createdAt: s.createdAt,
       lastActivity: s.lastActivity,
     })),
-  });
-});
-
-/**
- * POST /admin/tokens - Create a new authentication token (admin only)
- * In production, this should be replaced with proper user management
- */
-app.post("/admin/tokens", async (req, res) => {
-  const { apiToken, fullAccessToken, userId, adminSecret } = req.body;
-
-  // Simple admin authentication - replace with proper auth in production
-  if (adminSecret !== process.env.ADMIN_SECRET) {
-    return res.status(403).json({
-      error: "Forbidden",
-      message: "Invalid admin credentials",
-    });
-  }
-
-  if (!apiToken || !fullAccessToken || !userId) {
-    return res.status(400).json({
-      error: "Bad request",
-      message: "apiToken, fullAccessToken, and userId are required",
-    });
-  }
-
-  // Generate a new token
-  const token = uuidv4();
-
-  authorizedTokens.set(token, {
-    apiToken,
-    fullAccessToken,
-    userId,
-  });
-
-  console.log(`Created new authentication token for user ${userId}`);
-
-  res.json({
-    token,
-    userId,
-    message: "Token created successfully",
   });
 });
 
@@ -526,10 +467,10 @@ Endpoints:
   GET    /mcp              - SSE stream endpoint
   DELETE /sessions/:id     - Terminate session
   GET    /health           - Health check
-  GET    /stats            - User statistics
-  POST   /admin/tokens     - Create auth token (admin)
+  GET    /stats            - Session statistics
 
 Active sessions: ${sessions.size}
+${API_KEY ? "🔐 API Key authentication: ENABLED" : "⚠️  API Key authentication: DISABLED (set API_KEY env var to enable)"}
   `);
 });
 
