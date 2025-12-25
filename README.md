@@ -101,49 +101,34 @@ For Claude Code, add to your settings:
 
 Want to access your Marvin MCP server from anywhere? Deploy it as a remote HTTP server!
 
-**See the complete guide:** [REMOTE_DEPLOYMENT.md](./REMOTE_DEPLOYMENT.md)
+**📱 Perfect for apps like Poke that support remote MCP servers!**
+
+**See the simple guide:** [SIMPLE_REMOTE_SETUP.md](./SIMPLE_REMOTE_SETUP.md) (3 steps!)
 
 **Quick overview:**
-- Deploy to Coolify, Heroku, Google Cloud Run, or any platform
-- Multi-user support with Bearer token authentication
-- Access from multiple devices and platforms
-- Built-in session management and security
+- Deploy to Coolify (or any platform)
+- Simple API key authentication
+- Access from multiple devices
+- Built-in session management
 
-**Quick start with Coolify:**
-```bash
-# 1. Push to Git
-git push origin main
+**Super quick setup:**
+1. Deploy to Coolify with your Marvin API tokens
+2. Add your server URL to Poke
+3. Start using Marvin tools!
 
-# 2. Configure in Coolify:
-#    - Port: 3000
-#    - Health check: /health
-#    - Set environment variables
-
-# 3. Deploy and get your server URL
+**Environment variables to set in Coolify:**
+```env
+MARVIN_API_TOKEN=your-marvin-api-token
+MARVIN_FULL_ACCESS_TOKEN=your-marvin-full-access-token
+API_KEY=your-secure-api-key  # Optional but recommended
 ```
 
-**Connect to remote server:**
-```json
-{
-  "mcpServers": {
-    "marvin-remote": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://your-server.com/mcp",
-        "--header",
-        "Authorization:Bearer ${MARVIN_MCP_TOKEN}"
-      ],
-      "env": {
-        "MARVIN_MCP_TOKEN": "your-token-here"
-      }
-    }
-  }
-}
-```
+**Connect from Poke or similar apps:**
+- Server URL: `https://your-server.com/mcp`
+- API Key: Your `API_KEY` from above
 
-For detailed instructions on deployment, security setup, and configuration, see [REMOTE_DEPLOYMENT.md](./REMOTE_DEPLOYMENT.md).
+For detailed instructions, see [SIMPLE_REMOTE_SETUP.md](./SIMPLE_REMOTE_SETUP.md).
+For advanced features (multi-user, OAuth, etc.), see [REMOTE_DEPLOYMENT.md](./REMOTE_DEPLOYMENT.md).
 
 ## Available Tools (19 total)
 
