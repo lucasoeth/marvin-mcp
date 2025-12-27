@@ -4,12 +4,12 @@
  * Amazing Marvin Remote MCP Server
  *
  * A remote HTTP server that exposes the Marvin MCP tools over the internet
- * using Streamable HTTP transport. Simple single-user setup.
+ * using Streamable HTTP transport in stateless mode (Poke-compatible).
+ * Simple single-user setup.
  */
 
 import express from "express";
 import cors from "cors";
-import { v4 as uuidv4 } from "uuid";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
@@ -47,17 +47,6 @@ if (!MARVIN_API_TOKEN || !MARVIN_FULL_ACCESS_TOKEN) {
   console.error("Please set MARVIN_API_TOKEN and MARVIN_FULL_ACCESS_TOKEN");
   process.exit(1);
 }
-
-// Session management
-interface Session {
-  sessionId: string;
-  transport: StreamableHTTPServerTransport;
-  server: McpServer;
-  createdAt: Date;
-  lastActivity: Date;
-}
-
-const sessions = new Map<string, Session>();
 
 // Initialize Express app
 const app = express();
@@ -274,57 +263,32 @@ function createMcpServer(): McpServer {
 }
 
 /**
- * POST /mcp - Main MCP endpoint for requests
+ * POST /mcp - Main MCP endpoint for requests (stateless mode)
  */
 app.post("/mcp", authenticate, async (req, res) => {
-  const sessionIdHeader = req.headers["mcp-session-id"] as string | undefined;
-  const body = req.body;
+  console.error(`[MCP] Incoming request: ${req.method} ${req.url}`);
 
   try {
-    let session: Session;
-    const isInitialize = body?.method === "initialize";
+    // Create a new transport for this request (stateless mode)
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined, // stateless mode
+    });
 
-    // Check if this is a new session or existing
-    if (sessionIdHeader && sessions.has(sessionIdHeader)) {
-      // Existing session
-      session = sessions.get(sessionIdHeader)!;
-      session.lastActivity = new Date();
-    } else if (!isInitialize) {
-      // Non-initialize request without valid session
-      return res.status(400).json({
-        jsonrpc: "2.0",
-        error: {
-          code: -32000,
-          message: "No valid session. Please initialize first.",
-        },
-        id: body?.id,
-      });
-    } else {
-      // New session - create MCP server instance
-      const sessionId = uuidv4();
-      const mcpServer = createMcpServer();
+    // Create a new MCP server instance for this request
+    const mcpServer = createMcpServer();
 
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => sessionId,
-      });
+    // Connect server to transport
+    await mcpServer.connect(transport);
 
-      await mcpServer.connect(transport);
+    // Handle the MCP request
+    await transport.handleRequest(req, res, req.body);
+    console.error(`[MCP] Request handled successfully`);
 
-      session = {
-        sessionId,
-        transport,
-        server: mcpServer,
-        createdAt: new Date(),
-        lastActivity: new Date(),
-      };
-
-      sessions.set(sessionId, session);
-
-      console.log(`Created new session ${sessionId}`);
-    }
-
-    // Handle the request through the transport
-    await session.transport.handleRequest(req, res, body);
+    // Cleanup when response is done
+    res.on("close", () => {
+      console.error(`[MCP] Connection closed`);
+      transport.close();
+    });
   } catch (error) {
     console.error("Error handling MCP request:", error);
     if (!res.headersSent) {
@@ -338,60 +302,14 @@ app.post("/mcp", authenticate, async (req, res) => {
 });
 
 /**
- * GET /mcp - SSE endpoint for server-initiated messages
+ * GET /mcp - SSE endpoint (stateless - not needed but kept for compatibility)
  */
 app.get("/mcp", authenticate, async (req, res) => {
-  const sessionId = req.headers["mcp-session-id"] as string | undefined;
-
-  if (!sessionId || !sessions.has(sessionId)) {
-    return res.status(400).json({
-      error: "Invalid session",
-      message: "No valid session ID provided or session expired",
-    });
-  }
-
-  const session = sessions.get(sessionId)!;
-  session.lastActivity = new Date();
-
-  try {
-    // Handle the GET request for SSE stream
-    await session.transport.handleRequest(req, res);
-  } catch (error) {
-    console.error("Error in SSE stream:", error);
-    if (!res.headersSent) {
-      res.status(500).end();
-    }
-  }
-});
-
-/**
- * DELETE /sessions/:sessionId - Terminate a session
- */
-app.delete("/sessions/:sessionId", authenticate, async (req, res) => {
-  const { sessionId } = req.params;
-
-  if (!sessions.has(sessionId)) {
-    return res.status(404).json({
-      error: "Session not found",
-      message: `No session found with ID: ${sessionId}`,
-    });
-  }
-
-  const session = sessions.get(sessionId)!;
-
-  // Close the session
-  try {
-    await session.transport.close();
-    sessions.delete(sessionId);
-    console.log(`Session ${sessionId} terminated`);
-    res.status(204).end();
-  } catch (error) {
-    console.error("Error closing session:", error);
-    res.status(500).json({
-      error: "Failed to close session",
-      message: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
+  console.error(`[MCP] GET request received (SSE not supported in stateless mode)`);
+  res.status(501).json({
+    error: "Not Implemented",
+    message: "SSE streaming is not supported in stateless mode",
+  });
 });
 
 /**
@@ -401,7 +319,7 @@ app.get("/health", (req, res) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
-    activeSessions: sessions.size,
+    mode: "stateless",
     uptime: process.uptime(),
   });
 });
@@ -411,42 +329,11 @@ app.get("/health", (req, res) => {
  */
 app.get("/stats", authenticate, (req, res) => {
   res.json({
-    activeSessions: sessions.size,
-    sessions: Array.from(sessions.values()).map((s) => ({
-      sessionId: s.sessionId,
-      createdAt: s.createdAt,
-      lastActivity: s.lastActivity,
-    })),
+    mode: "stateless",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
   });
 });
-
-/**
- * Session cleanup - remove inactive sessions
- */
-const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour
-
-setInterval(() => {
-  const now = new Date();
-  const expiredSessions: string[] = [];
-
-  for (const [sessionId, session] of sessions.entries()) {
-    const inactiveTime = now.getTime() - session.lastActivity.getTime();
-    if (inactiveTime > SESSION_TIMEOUT) {
-      expiredSessions.push(sessionId);
-    }
-  }
-
-  for (const sessionId of expiredSessions) {
-    const session = sessions.get(sessionId)!;
-    session.transport.close().catch(console.error);
-    sessions.delete(sessionId);
-    console.log(`Cleaned up expired session ${sessionId}`);
-  }
-
-  if (expiredSessions.length > 0) {
-    console.log(`Cleaned up ${expiredSessions.length} expired sessions`);
-  }
-}, 10 * 60 * 1000); // Check every 10 minutes
 
 /**
  * Start the server
@@ -459,17 +346,14 @@ app.listen(PORT, () => {
 
 🚀 Server running on port ${PORT}
 🌍 Environment: ${NODE_ENV}
-📡 Transport: HTTP + SSE
+📡 Transport: HTTP (Stateless)
 🔒 Authentication: Bearer Token
 
 Endpoints:
-  POST   /mcp              - Main MCP endpoint
-  GET    /mcp              - SSE stream endpoint
-  DELETE /sessions/:id     - Terminate session
+  POST   /mcp              - Main MCP endpoint (stateless)
   GET    /health           - Health check
-  GET    /stats            - Session statistics
+  GET    /stats            - Server statistics
 
-Active sessions: ${sessions.size}
 ${API_KEY ? "🔐 API Key authentication: ENABLED" : "⚠️  API Key authentication: DISABLED (set API_KEY env var to enable)"}
   `);
 });
@@ -477,22 +361,10 @@ ${API_KEY ? "🔐 API Key authentication: ENABLED" : "⚠️  API Key authentica
 // Graceful shutdown
 process.on("SIGTERM", async () => {
   console.log("SIGTERM received, shutting down gracefully...");
-
-  // Close all sessions
-  for (const session of sessions.values()) {
-    await session.transport.close();
-  }
-
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
   console.log("\nSIGINT received, shutting down gracefully...");
-
-  // Close all sessions
-  for (const session of sessions.values()) {
-    await session.transport.close();
-  }
-
   process.exit(0);
 });
