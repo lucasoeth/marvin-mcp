@@ -302,14 +302,12 @@ app.post("/mcp", authenticate, async (req, res) => {
 });
 
 /**
- * GET /mcp - SSE endpoint (stateless - not needed but kept for compatibility)
+ * GET /mcp - SSE endpoint (not supported in stateless mode)
+ * MUST return 405 Method Not Allowed per MCP spec for stateless servers
  */
 app.get("/mcp", authenticate, async (req, res) => {
   console.error(`[MCP] GET request received (SSE not supported in stateless mode)`);
-  res.status(501).json({
-    error: "Not Implemented",
-    message: "SSE streaming is not supported in stateless mode",
-  });
+  res.status(405).set('Allow', 'POST, OPTIONS').end();
 });
 
 /**
