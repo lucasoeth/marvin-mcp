@@ -4,12 +4,13 @@
  * Amazing Marvin Remote MCP Server
  *
  * A remote HTTP server that exposes the Marvin MCP tools over the internet
- * using Streamable HTTP transport in stateless mode (Poke-compatible).
+ * using Streamable HTTP transport with SSE support.
  * Simple single-user setup.
  */
 
 import express from "express";
 import cors from "cors";
+import { randomUUID } from "crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
@@ -47,6 +48,28 @@ if (!MARVIN_API_TOKEN || !MARVIN_FULL_ACCESS_TOKEN) {
   console.error("Please set MARVIN_API_TOKEN and MARVIN_FULL_ACCESS_TOKEN");
   process.exit(1);
 }
+
+// Session management for SSE support
+interface Session {
+  transport: StreamableHTTPServerTransport;
+  mcpServer: McpServer;
+  createdAt: Date;
+}
+
+const sessions = new Map<string, Session>();
+
+// Clean up stale sessions (older than 30 minutes)
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 30 * 60 * 1000; // 30 minutes
+  for (const [sessionId, session] of sessions) {
+    if (now - session.createdAt.getTime() > maxAge) {
+      console.log(`[Session] Cleaning up stale session: ${sessionId}`);
+      session.transport.close();
+      sessions.delete(sessionId);
+    }
+  }
+}, 5 * 60 * 1000); // Check every 5 minutes
 
 // Initialize Express app
 const app = express();
@@ -94,26 +117,14 @@ async function authenticate(
     return next();
   }
 
-  // Check for API key in Authorization header (Bearer token) or X-API-Key header
-  const authHeader = req.headers["authorization"];
-  const apiKeyHeader = req.headers["x-api-key"] as string;
-
-  let providedKey: string | undefined;
-
-  if (authHeader?.startsWith("Bearer ")) {
-    providedKey = authHeader.substring(7);
-  } else if (apiKeyHeader) {
-    providedKey = apiKeyHeader;
-  }
+  // Check for API key in query param 'token'
+  const providedKey = req.query.token as string | undefined;
 
   if (!providedKey) {
-    return res
-      .status(401)
-      .header("WWW-Authenticate", 'Bearer realm="Marvin MCP Server"')
-      .json({
-        error: "Missing authentication",
-        message: "Please provide an API key in the Authorization header or X-API-Key header",
-      });
+    return res.status(401).json({
+      error: "Missing authentication",
+      message: "Please provide an API key in the 'token' query parameter",
+    });
   }
 
   if (providedKey !== API_KEY) {
@@ -263,18 +274,29 @@ function createMcpServer(): McpServer {
 }
 
 /**
- * POST /mcp - Main MCP endpoint for requests (stateless mode)
+ * POST /mcp - Main MCP endpoint for requests (with session support for SSE)
  */
 app.post("/mcp", authenticate, async (req, res) => {
-  console.error(`[MCP] Incoming request: ${req.method} ${req.url}`);
+  console.error(`[MCP] Incoming POST request: ${req.method} ${req.url}`);
 
   try {
-    // Create a new transport for this request (stateless mode)
+    // Check if there's an existing session
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+    if (sessionId && sessions.has(sessionId)) {
+      // Reuse existing session
+      const session = sessions.get(sessionId)!;
+      console.error(`[MCP] Reusing existing session: ${sessionId}`);
+      await session.transport.handleRequest(req, res, req.body);
+      return;
+    }
+
+    // Create a new session with transport
     const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined, // stateless mode
+      sessionIdGenerator: () => randomUUID(),
     });
 
-    // Create a new MCP server instance for this request
+    // Create a new MCP server instance
     const mcpServer = createMcpServer();
 
     // Connect server to transport
@@ -282,15 +304,21 @@ app.post("/mcp", authenticate, async (req, res) => {
 
     // Handle the MCP request
     await transport.handleRequest(req, res, req.body);
-    console.error(`[MCP] Request handled successfully`);
 
-    // Cleanup when response is done
-    res.on("close", () => {
-      console.error(`[MCP] Connection closed`);
-      transport.close();
-    });
+    // Store session for future requests (including SSE)
+    const newSessionId = transport.sessionId;
+    if (newSessionId) {
+      sessions.set(newSessionId, {
+        transport,
+        mcpServer,
+        createdAt: new Date(),
+      });
+      console.error(`[MCP] Created new session: ${newSessionId}`);
+    }
+
+    console.error(`[MCP] POST request handled successfully`);
   } catch (error) {
-    console.error("Error handling MCP request:", error);
+    console.error("Error handling MCP POST request:", error);
     if (!res.headersSent) {
       res.status(500).json({
         error: "Internal server error",
@@ -302,12 +330,54 @@ app.post("/mcp", authenticate, async (req, res) => {
 });
 
 /**
- * GET /mcp - SSE endpoint (not supported in stateless mode)
- * MUST return 405 Method Not Allowed per MCP spec for stateless servers
+ * GET /mcp - SSE endpoint for server-to-client streaming
  */
 app.get("/mcp", authenticate, async (req, res) => {
-  console.error(`[MCP] GET request received (SSE not supported in stateless mode)`);
-  res.status(405).set('Allow', 'POST, OPTIONS').end();
+  console.error(`[MCP] Incoming GET request (SSE): ${req.url}`);
+
+  const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.status(400).json({
+      error: "Invalid session",
+      message: "Please provide a valid Mcp-Session-Id header. Create a session first with POST /mcp",
+    });
+  }
+
+  const session = sessions.get(sessionId)!;
+  console.error(`[MCP] SSE connection for session: ${sessionId}`);
+
+  // Handle the SSE request
+  await session.transport.handleRequest(req, res);
+
+  // Cleanup on connection close
+  res.on("close", () => {
+    console.error(`[MCP] SSE connection closed for session: ${sessionId}`);
+  });
+});
+
+/**
+ * DELETE /mcp - Session cleanup endpoint
+ */
+app.delete("/mcp", authenticate, async (req, res) => {
+  const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+  if (!sessionId) {
+    return res.status(400).json({
+      error: "Missing session ID",
+      message: "Please provide a Mcp-Session-Id header",
+    });
+  }
+
+  const session = sessions.get(sessionId);
+  if (session) {
+    session.transport.close();
+    sessions.delete(sessionId);
+    console.error(`[MCP] Session deleted: ${sessionId}`);
+    res.status(200).json({ message: "Session deleted" });
+  } else {
+    res.status(404).json({ error: "Session not found" });
+  }
 });
 
 /**
@@ -317,7 +387,8 @@ app.get("/health", (req, res) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
-    mode: "stateless",
+    mode: "stateful-sse",
+    activeSessions: sessions.size,
     uptime: process.uptime(),
   });
 });
@@ -327,7 +398,8 @@ app.get("/health", (req, res) => {
  */
 app.get("/stats", authenticate, (req, res) => {
   res.json({
-    mode: "stateless",
+    mode: "stateful-sse",
+    activeSessions: sessions.size,
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });
@@ -344,11 +416,13 @@ app.listen(PORT, () => {
 
 🚀 Server running on port ${PORT}
 🌍 Environment: ${NODE_ENV}
-📡 Transport: HTTP (Stateless)
-🔒 Authentication: Bearer Token
+📡 Transport: HTTP + SSE (Stateful)
+🔒 Authentication: Query param 'token'
 
 Endpoints:
-  POST   /mcp              - Main MCP endpoint (stateless)
+  POST   /mcp              - MCP requests (creates session)
+  GET    /mcp              - SSE stream (requires session)
+  DELETE /mcp              - Delete session
   GET    /health           - Health check
   GET    /stats            - Server statistics
 
