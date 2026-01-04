@@ -2,15 +2,17 @@
  * Response formatting utilities for consistent output
  */
 
-import { MarvinTask, MarvinProject, MarvinCategory, MarvinLabel } from "../marvin-api.js";
+import { MarvinTask, MarvinProject, MarvinCategory, MarvinLabel, isProject } from "../marvin-api.js";
 
 /**
- * Formats a task for display in lists
+ * Formats a task or project for display in lists
+ * Detects if the item is a project (db="Categories" && type="project") and shows appropriate type indicator
  */
 export function formatTask(task: MarvinTask): string {
   const checkbox = task.done ? "x" : " ";
-  const parts = [`- [${checkbox}] ${task.title} (ID: ${task._id})`];
-  
+  const typeIndicator = isProject(task) ? " [project]" : "";
+  const parts = [`- [${checkbox}] ${task.title} (ID: ${task._id})${typeIndicator}`];
+
   if (task.day) parts.push(` [${task.day}]`);
   if (task.dueDate) parts.push(` [Due: ${task.dueDate}]`);
   if (task.isStarred) parts.push(` [Priority: ${task.isStarred}]`);
