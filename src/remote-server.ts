@@ -117,13 +117,24 @@ async function authenticate(
     return next();
   }
 
-  // Check for API key in query param 'token'
-  const providedKey = req.query.token as string | undefined;
+  // Check for API key in multiple locations for compatibility
+  // 1. Authorization Bearer header (Poke.com standard)
+  const authHeader = req.header("authorization");
+  let providedKey: string | undefined;
+
+  if (authHeader?.startsWith("Bearer ")) {
+    providedKey = authHeader.substring(7); // Remove "Bearer " prefix
+  }
+
+  // 2. Query param 'token' (fallback for other clients)
+  if (!providedKey) {
+    providedKey = req.query.token as string | undefined;
+  }
 
   if (!providedKey) {
     return res.status(401).json({
       error: "Missing authentication",
-      message: "Please provide an API key in the 'token' query parameter",
+      message: "Please provide an API key in the Authorization header (Bearer token) or 'token' query parameter",
     });
   }
 
@@ -148,6 +159,25 @@ app.use((req, res, next) => {
       message: "This server requires HTTPS in production",
     });
   }
+  next();
+});
+
+// Fix Accept header for MCP SDK compatibility
+// The MCP SDK strictly requires Accept: application/json, text/event-stream
+// Some clients (like Poke) may not send this header, so we ensure it's present
+app.use("/mcp", (req, res, next) => {
+  const acceptHeader = req.header("accept") || "";
+
+  // If the Accept header is missing or doesn't include required types, fix it
+  const hasJson = acceptHeader.includes("application/json");
+  const hasSSE = acceptHeader.includes("text/event-stream");
+
+  if (!hasJson || !hasSSE) {
+    // Set the required Accept header
+    req.headers.accept = "application/json, text/event-stream";
+    console.log(`[MCP] Fixed Accept header from: "${acceptHeader}" to: "application/json, text/event-stream"`);
+  }
+
   next();
 });
 
