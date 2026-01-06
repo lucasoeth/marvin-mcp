@@ -40,6 +40,10 @@ export const projectTools: Tool[] = [
           type: "string",
           description: "Due date in YYYY-MM-DD format",
         },
+        note: {
+          type: "string",
+          description: "Project notes or description",
+        },
       },
       required: ["title"],
     },
@@ -84,6 +88,10 @@ export const projectTools: Tool[] = [
         dueDate: {
           type: "string",
           description: "New due date in YYYY-MM-DD format",
+        },
+        note: {
+          type: "string",
+          description: "Project notes or description",
         },
       },
       required: ["projectId"],
@@ -186,6 +194,7 @@ Title: ${project.title}${project.priority ? `\nPriority: ${project.priority}` : 
         if (args.priority !== undefined) updates.priority = args.priority;
         if (args.day !== undefined) updates.day = args.day;
         if (args.dueDate !== undefined) updates.dueDate = args.dueDate;
+        if (args.note !== undefined) updates.note = args.note;
 
         await this.marvin.updateDocument(args.projectId, updates);
         return `Project ${args.projectId} updated successfully!`;

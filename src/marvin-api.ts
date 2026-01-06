@@ -40,6 +40,7 @@ export interface MarvinProject {
   done?: boolean;
   day?: string;
   dueDate?: string;
+  note?: string;
   createdAt?: number;
   updatedAt?: number;
   color?: string;
@@ -89,6 +90,7 @@ export interface CreateProjectOptions {
   priority?: "high" | "mid" | "low";
   day?: string;
   dueDate?: string;
+  note?: string;
 }
 
 export interface CreateCategoryOptions {
@@ -295,6 +297,7 @@ export class MarvinAPI {
     if (options.priority) payload.priority = options.priority;
     if (options.day) payload.day = options.day;
     if (options.dueDate) payload.dueDate = options.dueDate;
+    if (options.note) payload.note = options.note;
 
     return this.request<MarvinProject>("/addProject", {
       method: "POST",
