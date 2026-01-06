@@ -40,6 +40,7 @@ export interface CreateProjectArgs {
   priority?: "high" | "mid" | "low";
   day?: string;
   dueDate?: string;
+  note?: string;
 }
 
 /**
@@ -51,6 +52,7 @@ export interface UpdateProjectArgs {
   priority?: "high" | "mid" | "low";
   day?: string;
   dueDate?: string;
+  note?: string;
 }
 
 /**
