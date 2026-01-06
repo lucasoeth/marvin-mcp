@@ -3,8 +3,14 @@
  */
 
 import { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { MarvinAPI } from "../marvin-api.js";
-import { CreateTaskArgs, UpdateTaskArgs } from "../types/tools.js";
+import {
+  CreateTaskArgs,
+  UpdateTaskArgs,
+  CreateTaskArgsSchema,
+  UpdateTaskArgsSchema
+} from "../types/tools.js";
 import { validateDate, validateId, validatePriority, validateTimeEstimate, assertValid } from "../utils/validation.js";
 import { formatTask, formatList, formatTaskDetails } from "../utils/formatting.js";
 import { handleToolExecution, createSuccessResponse, createErrorResponse } from "../utils/errors.js";
@@ -17,47 +23,9 @@ export const taskTools: Tool[] = [
     name: "marvin_create_task",
     description:
       "Create a new task in Amazing Marvin. Supports inline syntax in title like '+today' for scheduling, '#Category' for categorization, and '@label' for labels.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        title: {
-          type: "string",
-          description:
-            "Task title. Can include inline syntax like '+today', '+tomorrow', '#CategoryName', '@labelName'",
-        },
-        day: {
-          type: "string",
-          description: "Scheduled date in YYYY-MM-DD format (e.g., '2024-01-15')",
-        },
-        dueDate: {
-          type: "string",
-          description: "Due date in YYYY-MM-DD format",
-        },
-        timeEstimate: {
-          type: "number",
-          description: "Estimated time in minutes",
-        },
-        parentId: {
-          type: "string",
-          description: "ID of parent project or category",
-        },
-        labelIds: {
-          type: "array",
-          items: { type: "string" },
-          description: "Array of label IDs to attach",
-        },
-        note: {
-          type: "string",
-          description: "Additional notes for the task",
-        },
-        isStarred: {
-          type: "number",
-          enum: [1, 2, 3],
-          description: "Priority level: 1=yellow (low), 2=orange (medium), 3=red (high)",
-        },
-      },
-      required: ["title"],
-    },
+    inputSchema: zodToJsonSchema(CreateTaskArgsSchema as any, {
+      $refStrategy: "none",
+    }) as any,
   },
   {
     name: "marvin_get_today_tasks",
@@ -95,50 +63,9 @@ export const taskTools: Tool[] = [
     name: "marvin_update_task",
     description:
       "Update an existing task in Amazing Marvin. Can modify title, dates, notes, and other properties.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        taskId: {
-          type: "string",
-          description: "The ID of the task to update",
-        },
-        title: {
-          type: "string",
-          description: "New title for the task",
-        },
-        day: {
-          type: "string",
-          description: "New scheduled date in YYYY-MM-DD format",
-        },
-        dueDate: {
-          type: "string",
-          description: "New due date in YYYY-MM-DD format",
-        },
-        timeEstimate: {
-          type: "number",
-          description: "New time estimate in minutes",
-        },
-        note: {
-          type: "string",
-          description: "New notes for the task",
-        },
-        parentId: {
-          type: "string",
-          description: "New parent project or category ID",
-        },
-        labelIds: {
-          type: "array",
-          items: { type: "string" },
-          description: "New array of label IDs",
-        },
-        isStarred: {
-          type: "number",
-          enum: [0, 1, 2, 3],
-          description: "Priority level: 0=none, 1=yellow, 2=orange, 3=red",
-        },
-      },
-      required: ["taskId"],
-    },
+    inputSchema: zodToJsonSchema(UpdateTaskArgsSchema as any, {
+      $refStrategy: "none",
+    }) as any,
   },
   {
     name: "marvin_delete_task",
@@ -227,21 +154,9 @@ export class TaskHandlers {
     return handleToolExecution(
       "create task",
       async () => {
-        // Validate inputs
-        if (args.day) {
-          assertValid(validateDate(args.day), `Invalid date format for day: ${args.day}. Use YYYY-MM-DD`);
-        }
-        if (args.dueDate) {
-          assertValid(validateDate(args.dueDate), `Invalid date format for dueDate: ${args.dueDate}. Use YYYY-MM-DD`);
-        }
-        if (args.timeEstimate !== undefined) {
-          assertValid(validateTimeEstimate(args.timeEstimate), `Time estimate must be a positive number`);
-        }
-        if (args.isStarred !== undefined) {
-          assertValid(validatePriority(args.isStarred), `Priority (isStarred) must be 1, 2, or 3`);
-        }
-
-        const task = await this.marvin.createTask(args);
+        // Validate with Zod
+        const validated = CreateTaskArgsSchema.parse(args);
+        const task = await this.marvin.createTask(validated);
 
         return `Task created successfully!
 
@@ -295,31 +210,21 @@ Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate 
     return handleToolExecution(
       "update task",
       async () => {
-        assertValid(validateId(args.taskId), "Task ID is required and must be non-empty");
-
-        // Validate optional fields
-        if (args.day) {
-          assertValid(validateDate(args.day), `Invalid date format for day: ${args.day}. Use YYYY-MM-DD`);
-        }
-        if (args.dueDate) {
-          assertValid(validateDate(args.dueDate), `Invalid date format for dueDate: ${args.dueDate}. Use YYYY-MM-DD`);
-        }
-        if (args.timeEstimate !== undefined) {
-          assertValid(validateTimeEstimate(args.timeEstimate), `Time estimate must be a positive number`);
-        }
+        // Validate with Zod
+        const validated = UpdateTaskArgsSchema.parse(args);
 
         const updates: Record<string, unknown> = {};
-        if (args.title !== undefined) updates.title = args.title;
-        if (args.day !== undefined) updates.day = args.day;
-        if (args.dueDate !== undefined) updates.dueDate = args.dueDate;
-        if (args.timeEstimate !== undefined) updates.timeEstimate = args.timeEstimate;
-        if (args.note !== undefined) updates.note = args.note;
-        if (args.parentId !== undefined) updates.parentId = args.parentId;
-        if (args.labelIds !== undefined) updates.labelIds = args.labelIds;
-        if (args.isStarred !== undefined) updates.isStarred = args.isStarred;
+        if (validated.title !== undefined) updates.title = validated.title;
+        if (validated.day !== undefined) updates.day = validated.day;
+        if (validated.dueDate !== undefined) updates.dueDate = validated.dueDate;
+        if (validated.timeEstimate !== undefined) updates.timeEstimate = validated.timeEstimate;
+        if (validated.note !== undefined) updates.note = validated.note;
+        if (validated.parentId !== undefined) updates.parentId = validated.parentId;
+        if (validated.labelIds !== undefined) updates.labelIds = validated.labelIds;
+        if (validated.isStarred !== undefined) updates.isStarred = validated.isStarred;
 
-        await this.marvin.updateDocument(args.taskId, updates);
-        return `Task ${args.taskId} updated successfully!`;
+        await this.marvin.updateDocument(validated.taskId, updates);
+        return `Task ${validated.taskId} updated successfully!`;
       },
       (result) => result
     );
