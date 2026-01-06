@@ -151,6 +151,25 @@ app.use((req, res, next) => {
   next();
 });
 
+// Fix Accept header for MCP SDK compatibility
+// The MCP SDK strictly requires Accept: application/json, text/event-stream
+// Some clients (like Poke) may not send this header, so we ensure it's present
+app.use("/mcp", (req, res, next) => {
+  const acceptHeader = req.header("accept") || "";
+
+  // If the Accept header is missing or doesn't include required types, fix it
+  const hasJson = acceptHeader.includes("application/json");
+  const hasSSE = acceptHeader.includes("text/event-stream");
+
+  if (!hasJson || !hasSSE) {
+    // Set the required Accept header
+    req.headers.accept = "application/json, text/event-stream";
+    console.log(`[MCP] Fixed Accept header from: "${acceptHeader}" to: "application/json, text/event-stream"`);
+  }
+
+  next();
+});
+
 // Combine all tools
 const allTools = [
   ...taskTools,
