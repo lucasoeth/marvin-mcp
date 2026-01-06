@@ -3,8 +3,14 @@
  */
 
 import { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { MarvinAPI } from "../marvin-api.js";
-import { CreateProjectArgs, UpdateProjectArgs } from "../types/tools.js";
+import {
+  CreateProjectArgs,
+  UpdateProjectArgs,
+  CreateProjectArgsSchema,
+  UpdateProjectArgsSchema
+} from "../types/tools.js";
 import { validateDate, validateId, validateProjectPriority, assertValid } from "../utils/validation.js";
 import { formatProject, formatList } from "../utils/formatting.js";
 import { handleToolExecution } from "../utils/errors.js";
@@ -16,37 +22,9 @@ export const projectTools: Tool[] = [
   {
     name: "marvin_create_project",
     description: "Create a new project in Amazing Marvin.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        title: {
-          type: "string",
-          description: "Project title",
-        },
-        parentId: {
-          type: "string",
-          description: "ID of parent category or project for nesting",
-        },
-        priority: {
-          type: "string",
-          enum: ["high", "mid", "low"],
-          description: "Project priority level",
-        },
-        day: {
-          type: "string",
-          description: "Scheduled date in YYYY-MM-DD format",
-        },
-        dueDate: {
-          type: "string",
-          description: "Due date in YYYY-MM-DD format",
-        },
-        note: {
-          type: "string",
-          description: "Project notes or description",
-        },
-      },
-      required: ["title"],
-    },
+    inputSchema: zodToJsonSchema(CreateProjectArgsSchema as any, {
+      $refStrategy: "none",
+    }) as any,
   },
   {
     name: "marvin_get_project",
@@ -65,37 +43,9 @@ export const projectTools: Tool[] = [
   {
     name: "marvin_update_project",
     description: "Update an existing project in Amazing Marvin.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        projectId: {
-          type: "string",
-          description: "The ID of the project to update",
-        },
-        title: {
-          type: "string",
-          description: "New title for the project",
-        },
-        priority: {
-          type: "string",
-          enum: ["high", "mid", "low"],
-          description: "New priority level",
-        },
-        day: {
-          type: "string",
-          description: "New scheduled date in YYYY-MM-DD format",
-        },
-        dueDate: {
-          type: "string",
-          description: "New due date in YYYY-MM-DD format",
-        },
-        note: {
-          type: "string",
-          description: "Project notes or description",
-        },
-      },
-      required: ["projectId"],
-    },
+    inputSchema: zodToJsonSchema(UpdateProjectArgsSchema as any, {
+      $refStrategy: "none",
+    }) as any,
   },
   {
     name: "marvin_delete_project",
@@ -138,18 +88,9 @@ export class ProjectHandlers {
     return handleToolExecution(
       "create project",
       async () => {
-        // Validate inputs
-        if (args.day) {
-          assertValid(validateDate(args.day), `Invalid date format for day: ${args.day}. Use YYYY-MM-DD`);
-        }
-        if (args.dueDate) {
-          assertValid(validateDate(args.dueDate), `Invalid date format for dueDate: ${args.dueDate}. Use YYYY-MM-DD`);
-        }
-        if (args.priority) {
-          assertValid(validateProjectPriority(args.priority), `Priority must be "high", "mid", or "low"`);
-        }
-
-        const project = await this.marvin.createProject(args);
+        // Validate with Zod
+        const validated = CreateProjectArgsSchema.parse(args);
+        const project = await this.marvin.createProject(validated);
         
         return `Project created successfully!
 
@@ -176,28 +117,18 @@ Title: ${project.title}${project.priority ? `\nPriority: ${project.priority}` : 
     return handleToolExecution(
       "update project",
       async () => {
-        assertValid(validateId(args.projectId), "Project ID is required and must be non-empty");
-
-        // Validate optional fields
-        if (args.day) {
-          assertValid(validateDate(args.day), `Invalid date format for day: ${args.day}. Use YYYY-MM-DD`);
-        }
-        if (args.dueDate) {
-          assertValid(validateDate(args.dueDate), `Invalid date format for dueDate: ${args.dueDate}. Use YYYY-MM-DD`);
-        }
-        if (args.priority) {
-          assertValid(validateProjectPriority(args.priority), `Priority must be "high", "mid", or "low"`);
-        }
+        // Validate with Zod
+        const validated = UpdateProjectArgsSchema.parse(args);
 
         const updates: Record<string, unknown> = {};
-        if (args.title !== undefined) updates.title = args.title;
-        if (args.priority !== undefined) updates.priority = args.priority;
-        if (args.day !== undefined) updates.day = args.day;
-        if (args.dueDate !== undefined) updates.dueDate = args.dueDate;
-        if (args.note !== undefined) updates.note = args.note;
+        if (validated.title !== undefined) updates.title = validated.title;
+        if (validated.priority !== undefined) updates.priority = validated.priority;
+        if (validated.day !== undefined) updates.day = validated.day;
+        if (validated.dueDate !== undefined) updates.dueDate = validated.dueDate;
+        if (validated.note !== undefined) updates.note = validated.note;
 
-        await this.marvin.updateDocument(args.projectId, updates);
-        return `Project ${args.projectId} updated successfully!`;
+        await this.marvin.updateDocument(validated.projectId, updates);
+        return `Project ${validated.projectId} updated successfully!`;
       },
       (result) => result
     );
