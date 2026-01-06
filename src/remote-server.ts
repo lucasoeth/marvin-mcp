@@ -117,24 +117,13 @@ async function authenticate(
     return next();
   }
 
-  // Check for API key in multiple locations for compatibility
-  // 1. Authorization Bearer header (Poke.com standard)
-  const authHeader = req.header("authorization");
-  let providedKey: string | undefined;
-
-  if (authHeader?.startsWith("Bearer ")) {
-    providedKey = authHeader.substring(7); // Remove "Bearer " prefix
-  }
-
-  // 2. Query param 'token' (fallback for other clients)
-  if (!providedKey) {
-    providedKey = req.query.token as string | undefined;
-  }
+  // Check for API key in query param 'token'
+  const providedKey = req.query.token as string | undefined;
 
   if (!providedKey) {
     return res.status(401).json({
       error: "Missing authentication",
-      message: "Please provide an API key in the Authorization header (Bearer token) or 'token' query parameter",
+      message: "Please provide an API key in the 'token' query parameter",
     });
   }
 
