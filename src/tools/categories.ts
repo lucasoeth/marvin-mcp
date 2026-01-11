@@ -3,7 +3,6 @@
  */
 
 import { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { MarvinAPI } from "../marvin-api.js";
 import { CreateCategoryArgs, CreateCategoryArgsSchema } from "../types/tools.js";
 import { formatCategory, formatList } from "../utils/formatting.js";
@@ -26,9 +25,7 @@ export const categoryTools: Tool[] = [
     name: "marvin_create_category",
     description:
       "Create a new category in Amazing Marvin. Categories are organizational containers for tasks and projects.",
-    inputSchema: zodToJsonSchema(CreateCategoryArgsSchema as any, {
-      $refStrategy: "none",
-    }) as any,
+    inputSchema: CreateCategoryArgsSchema.toJSONSchema() as any,
   },
 ];
 

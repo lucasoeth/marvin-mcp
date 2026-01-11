@@ -3,7 +3,6 @@
  */
 
 import { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { MarvinAPI } from "../marvin-api.js";
 import {
   CreateProjectArgs,
@@ -22,9 +21,7 @@ export const projectTools: Tool[] = [
   {
     name: "marvin_create_project",
     description: "Create a new project in Amazing Marvin.",
-    inputSchema: zodToJsonSchema(CreateProjectArgsSchema as any, {
-      $refStrategy: "none",
-    }) as any,
+    inputSchema: CreateProjectArgsSchema.toJSONSchema() as any,
   },
   {
     name: "marvin_get_project",
@@ -43,9 +40,7 @@ export const projectTools: Tool[] = [
   {
     name: "marvin_update_project",
     description: "Update an existing project in Amazing Marvin.",
-    inputSchema: zodToJsonSchema(UpdateProjectArgsSchema as any, {
-      $refStrategy: "none",
-    }) as any,
+    inputSchema: UpdateProjectArgsSchema.toJSONSchema() as any,
   },
   {
     name: "marvin_delete_project",
