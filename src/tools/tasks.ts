@@ -3,7 +3,6 @@
  */
 
 import { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { MarvinAPI } from "../marvin-api.js";
 import {
   CreateTaskArgs,
@@ -23,9 +22,7 @@ export const taskTools: Tool[] = [
     name: "marvin_create_task",
     description:
       "Create a new task in Amazing Marvin. Supports inline syntax in title like '+today' for scheduling, '#Category' for categorization, and '@label' for labels.",
-    inputSchema: zodToJsonSchema(CreateTaskArgsSchema as any, {
-      $refStrategy: "none",
-    }) as any,
+    inputSchema: CreateTaskArgsSchema.toJSONSchema() as any,
   },
   {
     name: "marvin_get_today_tasks",
@@ -63,9 +60,7 @@ export const taskTools: Tool[] = [
     name: "marvin_update_task",
     description:
       "Update an existing task in Amazing Marvin. Can modify title, dates, notes, and other properties.",
-    inputSchema: zodToJsonSchema(UpdateTaskArgsSchema as any, {
-      $refStrategy: "none",
-    }) as any,
+    inputSchema: UpdateTaskArgsSchema.toJSONSchema() as any,
   },
   {
     name: "marvin_delete_task",
