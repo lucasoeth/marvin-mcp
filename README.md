@@ -44,8 +44,26 @@ front of you while there's still time.
 
 ## Setup
 
-You'll need a terminal for this part. It's three commands and about two minutes,
-and you only do it once.
+Two ways in. Both need the same six values from Marvin, and you only do this
+once.
+
+### Just Claude Desktop? No terminal needed.
+
+1. Download **`marvin-<version>.mcpb`** from the
+   [latest release](https://github.com/lucasoeth/marvin-mcp/releases/latest).
+2. Double-click it. Claude Desktop opens and asks whether to install.
+3. Paste the six values from step 2 below into the form it shows you.
+
+That's the whole thing. You don't need Node.js, npm or anything else installed —
+Claude Desktop brings its own, and everything the server needs is inside the
+file. Desktop stores the credentials in your operating system's keychain.
+
+Skip to [step 2](#2-get-your-amazing-marvin-tokens) for where the six values
+live, then to [Everyday use](#everyday-use).
+
+### Want the command line too?
+
+Then it's three commands and about two minutes.
 
 ### 1. Install it
 
@@ -174,7 +192,9 @@ This is the part that makes it more than a keyboard shortcut.
 claude mcp add marvin -- marvin-mcp
 ```
 
-**Claude Desktop** — open Settings → Developer → Edit Config, and add:
+**Claude Desktop** — if you installed the `.mcpb`, you're already done; it's
+under Settings → Extensions. Otherwise open Settings → Developer → Edit Config
+and add:
 
 ```json
 {
