@@ -3,7 +3,6 @@
   "version": "2.0.0",
   "description": "Amazing Marvin as a CLI and an MCP server",
   "type": "module",
-  "private": true,
   "main": "dist/bin/marvin.js",
   "bin": {
     "marvin": "./dist/bin/marvin.js",
@@ -11,8 +10,12 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -33,11 +36,19 @@
   },
   "keywords": [
     "mcp",
+    "model-context-protocol",
     "amazing-marvin",
     "todo",
-    "productivity"
+    "task-management",
+    "productivity",
+    "cli",
+    "claude"
   ],
-  "author": "",
+  "homepage": "https://github.com/lucasoeth/marvin-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/lucasoeth/marvin-mcp/issues"
+  },
+  "author": "Lucas Soeth",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
