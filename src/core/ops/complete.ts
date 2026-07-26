@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 import type { Task } from "../model.js";
-import { defineOp } from "./types.js";
+import { defineOp, type Ctx } from "./types.js";
 import { formatTask } from "./brief.js";
 
 const input = z.object({
@@ -47,7 +47,7 @@ export const complete = defineOp({
  */
 export async function resolveTask(
   needle: string,
-  ctx: { repo: { today(): Promise<Task[]>; due(): Promise<Task[]>; allTasks(): Promise<Task[]>; getTask(id: string): Promise<Task> } }
+  ctx: Pick<Ctx, "repo">
 ): Promise<Task> {
   const [today, due] = await Promise.all([ctx.repo.today(), ctx.repo.due()]);
   const near = dedupe([...today, ...due]);
@@ -59,13 +59,24 @@ export async function resolveTask(
   if (found.length === 1) return found[0];
   if (found.length > 1) throw ambiguous(needle, found);
 
-  const all = await ctx.repo.allTasks();
+  // Falling back to the full crawl, which can come back incomplete.
+  const { tasks: all, unreadable } = await ctx.repo.allTasks();
   const byId = all.find((t) => t.id === needle);
   if (byId) return byId;
 
   found = matchByTitle(all, needle);
   if (found.length === 1) return found[0];
   if (found.length > 1) throw ambiguous(needle, found);
+
+  // A partial crawl must not be reported as "no such task" — completing the
+  // wrong thing, or nothing, on the strength of a truncated search is worse
+  // than refusing.
+  if (unreadable.length > 0) {
+    throw new Error(
+      `No task matching "${needle}", but ${unreadable.length} container(s) ` +
+        `could not be read, so the search was incomplete. Retry, or pass an id.`
+    );
+  }
 
   // Last resort: it may be a real id that no listing returned.
   try {

@@ -1,240 +1,125 @@
-# Amazing Marvin MCP Server
+# marvin
 
-An MCP (Model Context Protocol) server for [Amazing Marvin](https://amazingmarvin.com/) - the ultimate productivity app. This server enables AI assistants like Claude to manage your tasks, projects, categories, and labels in Amazing Marvin.
+Personal task management for [Amazing Marvin](https://amazingmarvin.com), as a
+command line tool and an MCP server.
 
-## Features
+Built for one person and one workflow: get things captured, see what today looks
+like, and let an AI assistant do the planning. It exposes nine task fields out of
+Marvin's roughly seventy, on purpose.
 
-### Task Management
-- **Create tasks** - With support for inline syntax (`+today`, `#Category`, `@label`) and priority levels
-- **Get today's tasks** - View all tasks scheduled for today
-- **Get due tasks** - View overdue tasks
-- **Get inbox** - View unorganized tasks (no parent category/project)
-- **Get tasks by date** - View tasks for any specific date
-- **Search tasks** - Find tasks by keyword in titles/notes
-- **Get all tasks** - Aggregate all accessible tasks
-- **Complete tasks** - Mark tasks as done
-- **Update tasks** - Modify title, dates, notes, priority, labels, and more
-- **Delete tasks** - Remove tasks permanently
-- **Get task details** - Retrieve full task information
-
-### Project Management
-- **Create projects** - With priority levels and scheduling
-- **Get project details** - Retrieve project information
-- **Update projects** - Modify project properties
-- **Delete projects** - Remove projects permanently
-- **Get children** - List all items under a project or category
-
-### Organization
-- **Get categories** - List all top-level categories
-- **Get labels** - List all available labels
-
-### Utilities
-- **Test connection** - Verify API authentication
-
-## Setup
-
-### Choose Your Deployment Method
-
-This MCP server can be run in two modes:
-
-1. **Local Mode** (stdio) - Run directly on your machine for personal use
-2. **Remote Mode** (HTTP) - Deploy to the internet for access from anywhere
-
-#### Local Mode (Quick Start)
-
-### 1. Get Your Amazing Marvin API Tokens
-
-1. Open Amazing Marvin desktop or web app
-2. Go to **Settings** (gear icon)
-3. Navigate to **API** section
-4. Copy your **API Token** and **Full Access Token**
-
-### 2. Install Dependencies
+## Install
 
 ```bash
 npm install
+npm run build
+npm link          # optional, puts `marvin` on your PATH
 ```
 
-### 3. Build the Server
+Set your credentials, from Amazing Marvin under **Settings → API**:
 
 ```bash
-npm run build
+export MARVIN_API_TOKEN=...
+export MARVIN_FULL_ACCESS_TOKEN=...
 ```
 
-### 4. Configure Your MCP Client
+Or put them in `.env`.
 
-Add the server to your MCP client configuration. For Claude Desktop, add to `claude_desktop_config.json`:
+## Use
+
+```bash
+marvin                                      # today's brief
+marvin capture "call dentist +tomorrow"     # add something
+marvin complete "dentist"                   # by id or title fragment
+marvin find "invoice"
+marvin hierarchy                            # projects and categories
+marvin undo                                 # revert the last change
+```
+
+`marvin` on its own prints the brief, because that is the thing you type every
+morning:
+
+```
+2026-07-26
+
+Overdue (1)
+  - Dry cleaner pickup at 6pm  (due 2026-05-20, overdue)  [71c2a7c1...]
+
+Today (3)
+  - Write the migration plan  (frog, 90m)  [a4f2...]
+  - Review PR #412  (!!, 30m)  [8c1e...]
+  - Book flights  (due 2026-07-28)  [3b90...]
+  2h30m estimated
+
+Due soon, no day assigned (1)
+  - Renew passport  (due 2026-07-29)  [d55a...]
+```
+
+That last section is the point. A task with a deadline and no day assigned is how
+things quietly go overdue.
+
+Add `--json` to any command for machine-readable output.
+
+### Scheduling vs deadlines
+
+Two independent fields, deliberately named so they cannot be confused:
+
+- **`scheduledFor`** — the day you plan to work on it
+- **`dueBy`** — the actual deadline
+
+```bash
+marvin capture "file taxes" --due-by 2026-09-01 --scheduled-for 2026-08-20
+```
+
+### Batch changes and undo
+
+```bash
+marvin apply --changes '[
+  {"action":"update","id":"a4f2...","set":{"scheduledFor":"2026-07-27"}},
+  {"action":"complete","id":"8c1e..."}
+]'
+
+marvin undo
+```
+
+Writes are applied without confirmation. Every one records its before-state to
+`~/.marvin/journal.jsonl`, and `undo` reverts the last change set as a unit.
+Genuine deletions cannot be undone, because Marvin issues a new id on recreate.
+
+## MCP
+
+The CLI and the MCP server are generated from the same registry, so they expose
+identical capabilities. Use the CLI if your agent has a shell; use MCP if it
+does not.
+
+Claude Desktop:
 
 ```json
 {
   "mcpServers": {
     "marvin": {
       "command": "node",
-      "args": ["/path/to/marvin-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/marvin-mcp/dist/bin/marvin-mcp.js"],
       "env": {
-        "MARVIN_API_TOKEN": "your-api-token-here",
-        "MARVIN_FULL_ACCESS_TOKEN": "your-full-access-token-here"
+        "MARVIN_API_TOKEN": "...",
+        "MARVIN_FULL_ACCESS_TOKEN": "..."
       }
     }
   }
 }
 ```
 
-For Claude Code, add to your settings:
+For remote access (Poke, mobile), `npm run mcp:remote` serves Streamable HTTP.
+It requires `API_KEY` and refuses to start without one, since it is
+internet-reachable and holds write access to your tasks. Authenticate with
+`?token=<API_KEY>`.
 
-```json
-{
-  "mcpServers": {
-    "marvin": {
-      "command": "node",
-      "args": ["/path/to/marvin-mcp/dist/index.js"],
-      "env": {
-        "MARVIN_API_TOKEN": "your-api-token-here",
-        "MARVIN_FULL_ACCESS_TOKEN": "your-full-access-token-here"
-      }
-    }
-  }
-}
-```
-
-#### Remote Mode (Deploy to Internet)
-
-Want to access your Marvin MCP server from anywhere? Deploy it as a remote HTTP server!
-
-**📱 Perfect for apps like Poke that support remote MCP servers!**
-
-**See the simple guide:** [SIMPLE_REMOTE_SETUP.md](./SIMPLE_REMOTE_SETUP.md) (3 steps!)
-
-**Quick overview:**
-- Deploy to Coolify (or any platform)
-- Simple API key authentication
-- Access from multiple devices
-- Built-in session management
-
-**Super quick setup:**
-1. Deploy to Coolify with your Marvin API tokens
-2. Add your server URL to Poke
-3. Start using Marvin tools!
-
-**Environment variables to set in Coolify:**
-```env
-MARVIN_API_TOKEN=your-marvin-api-token
-MARVIN_FULL_ACCESS_TOKEN=your-marvin-full-access-token
-API_KEY=your-secure-api-key  # Optional but recommended
-```
-
-**Connect from Poke or similar apps:**
-- Server URL: `https://your-server.com/mcp`
-- API Key: Your `API_KEY` from above
-
-For detailed instructions, see [SIMPLE_REMOTE_SETUP.md](./SIMPLE_REMOTE_SETUP.md).
-For advanced features (multi-user, OAuth, etc.), see [REMOTE_DEPLOYMENT.md](./REMOTE_DEPLOYMENT.md).
-
-## Available Tools (19 total)
-
-### Task Tools
-| Tool | Description |
-|------|-------------|
-| `marvin_create_task` | Create a new task with scheduling, labels, and priority |
-| `marvin_get_today_tasks` | Get all tasks scheduled for today |
-| `marvin_get_due_tasks` | Get all overdue tasks |
-| `marvin_get_inbox` | Get tasks without a parent (inbox) |
-| `marvin_get_tasks_by_date` | Get tasks for a specific date |
-| `marvin_search_tasks` | Search tasks by keyword |
-| `marvin_get_all_tasks` | Get all accessible tasks |
-| `marvin_complete_task` | Mark a task as complete |
-| `marvin_update_task` | Update task properties including priority and labels |
-| `marvin_delete_task` | Delete a task |
-| `marvin_get_task` | Get detailed task information |
-
-### Project Tools
-| Tool | Description |
-|------|-------------|
-| `marvin_create_project` | Create a new project |
-| `marvin_get_project` | Get project details |
-| `marvin_update_project` | Update a project |
-| `marvin_delete_project` | Delete a project |
-| `marvin_get_children` | Get child items under a parent |
-
-### Organization Tools
-| Tool | Description |
-|------|-------------|
-| `marvin_get_hierarchy` | List the full hierarchy of categories and projects |
-| `marvin_create_category` | Create a new category |
-| `marvin_get_labels` | List all labels |
-| `marvin_test_connection` | Test API connection |
-
-## Usage Examples
-
-Once connected, you can ask your AI assistant:
-
-- "Show me my tasks for today"
-- "Create a task to review the quarterly report, due next Friday"
-- "Mark the task about emails as complete"
-- "What projects do I have?"
-- "Add a task to call John under the Work category"
-- "Show me all my overdue tasks"
-
-## Task Creation Syntax
-
-Amazing Marvin supports inline syntax in task titles:
-
-- `+today` or `+tomorrow` - Schedule the task
-- `+monday` or `+next week` - Schedule for specific days
-- `#CategoryName` - Assign to a category
-- `@labelName` - Add a label
-- `~30m` or `~1h` - Set time estimate
-
-Example: "Buy groceries +tomorrow @errands ~30m"
-
-## Priority Levels
-
-Tasks support two priority systems:
-
-### Star Priority (isStarred)
-- `1` - Yellow star (low priority)
-- `2` - Orange star (medium priority)
-- `3` - Red star (high priority)
-
-### Frog Priority (isFrogged) - "Eat the Frog"
-Marvin itself supports frog values (`1` normal, `2` baby, `3` monster), and the
-field is read back on tasks, but **this server does not currently expose it as a
-tool parameter** — you cannot set it via `marvin_create_task` or
-`marvin_update_task` yet.
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `MARVIN_API_TOKEN` | Yes | Your Amazing Marvin API token |
-| `MARVIN_FULL_ACCESS_TOKEN` | Yes | Your Amazing Marvin full access token |
-
-## Development
+## Develop
 
 ```bash
-# Watch mode for development (local stdio mode)
-npm run dev
-
-# Build for production
-npm run build
-
-# Run the local stdio server
-npm start
-
-# Run the remote HTTP server (for testing remote mode locally)
-npm run start:remote
+npm test
+npm run typecheck
 ```
 
-## Files and Structure
-
-- `src/index.ts` - Local stdio MCP server
-- `src/remote-server.ts` - Remote HTTP MCP server
-- `src/tools/` - Tool implementations (tasks, projects, categories, labels, account)
-- `src/marvin-api.ts` - Amazing Marvin API client
-- `nixpacks.toml` - Coolify/nixpacks deployment configuration
-- `Dockerfile` - Docker deployment configuration
-- `REMOTE_DEPLOYMENT.md` - Complete remote deployment guide
-
-## License
-
-MIT
+Adding a capability means adding an op in `src/core/ops/` and registering it. The
+CLI command and the MCP tool are generated from it. See `AGENTS.md` for the
+architecture and for the Marvin API quirks worth knowing about.

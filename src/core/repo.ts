@@ -67,15 +67,24 @@ export class Repo {
   }
 
   /**
-   * Every task reachable from the container tree, plus today and due.
+   * Every task reachable from the container tree, plus today, due and the inbox.
    *
    * Marvin documents no search endpoint and no bulk export, so a crawl is the
-   * only option. Cycle-protected: a parentId loop in the data would otherwise
-   * recurse forever, which the previous implementation did not guard against.
+   * only option. Three things this has to get right:
+   *
+   * 1. The API is documented at 1 request per 3 seconds. Firing all 20-odd
+   *    container reads at once made them fail intermittently, and because the
+   *    failures were swallowed the crawl silently returned partial results:
+   *    consecutive runs on the same account returned 16, 38, 46 and 53 tasks.
+   *    Concurrency is capped and failures are retried.
+   * 2. A read that still fails after retries is reported, never hidden. A search
+   *    that quietly misses half the account is worse than a slow one.
+   * 3. A parentId cycle would otherwise recurse forever.
    */
-  async allTasks(): Promise<Task[]> {
+  async allTasks(): Promise<{ tasks: Task[]; unreadable: string[] }> {
     const seenContainers = new Set<string>();
     const byId = new Map<string, Task>();
+    const unreadable: string[] = [];
 
     const collect = (docs: Raw[]) => {
       for (const doc of docs) {
@@ -85,32 +94,40 @@ export class Repo {
       }
     };
 
+    const readChildren = async (parentId: string): Promise<Raw[] | null> => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          return await this.children(parentId);
+        } catch {
+          if (attempt < 2) await sleep(250 * 2 ** attempt);
+        }
+      }
+      unreadable.push(parentId);
+      return null;
+    };
+
     const walk = async (parentId: string): Promise<void> => {
       if (seenContainers.has(parentId)) return;
       seenContainers.add(parentId);
-      let docs: Raw[];
-      try {
-        docs = await this.children(parentId);
-      } catch {
-        return; // a single unreadable container must not fail the whole crawl
-      }
+      const docs = await readChildren(parentId);
+      if (!docs) return;
       collect(docs);
-      await Promise.all(
-        docs.filter(isProjectDoc).map((doc) => walk(String(doc._id)))
-      );
+      const nested = docs.filter(isProjectDoc).map((doc) => String(doc._id));
+      await mapLimited(nested, CRAWL_CONCURRENCY, walk);
     };
 
     const [todayTasks, dueTasks, containers] = await Promise.all([
-      this.today().catch(() => [] as Task[]),
-      this.due().catch(() => [] as Task[]),
-      this.containers().catch(() => [] as Container[]),
+      this.today(),
+      this.due(),
+      this.containers(),
     ]);
 
     for (const task of [...todayTasks, ...dueTasks]) byId.set(task.id, task);
-    await Promise.all(containers.map((container) => walk(container.id)));
-    collect(await this.children("unassigned").catch(() => []));
 
-    return [...byId.values()];
+    const roots = ["unassigned", ...containers.map((c) => c.id)];
+    await mapLimited(roots, CRAWL_CONCURRENCY, walk);
+
+    return { tasks: [...byId.values()], unreadable };
   }
 
   // -------------------------------------------------------------- writes
@@ -139,10 +156,30 @@ export class Repo {
     });
   }
 
-  /** Marvin's update takes an array of {key, val} setters rather than an object. */
+  /**
+   * Marvin's update takes an array of {key, val} setters rather than an object.
+   *
+   * Each setter is paired with a `fieldUpdates.<key>` timestamp. This is not
+   * cosmetic. Marvin resolves multi-device conflicts per field by comparing
+   * `fieldUpdates` timestamps, and the public API does not maintain them for us
+   * (verified: updating a title leaves both `updatedAt` and
+   * `fieldUpdates.title` at their original values). Without this, an edit made
+   * on the phone wins the merge regardless of who actually wrote last, and a
+   * change made here can silently vanish.
+   *
+   * https://github.com/amazingmarvin/MarvinAPI/wiki/Marvin-API
+   */
   async updateRaw(id: string, fields: Record<string, unknown>): Promise<void> {
-    const setters = Object.entries(fields).map(([key, val]) => ({ key, val }));
-    if (setters.length === 0) return;
+    const entries = Object.entries(fields);
+    if (entries.length === 0) return;
+
+    const now = Date.now();
+    const setters = entries.flatMap(([key, val]) => [
+      { key, val },
+      { key: `fieldUpdates.${key}`, val: now },
+    ]);
+    setters.push({ key: "updatedAt", val: now });
+
     await this.client.post(
       "/doc/update",
       { itemId: id, setters },
@@ -161,4 +198,31 @@ export class Repo {
 
 function asArray<T>(value: T[] | unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
+}
+
+/**
+ * Marvin documents 1 request per 3 seconds and 1440 per day, but enforces
+ * neither with a 429 — there is no backpressure to react to, so we self-limit.
+ * Strict pacing would make a full crawl take over a minute, which is unusable
+ * interactively; a small window keeps requests reliable without that cost.
+ */
+const CRAWL_CONCURRENCY = 3;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Like Promise.all over a mapper, but with at most `limit` in flight. */
+async function mapLimited<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<void>
+): Promise<void> {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      await fn(items[cursor++]);
+    }
+  });
+  await Promise.all(workers);
 }

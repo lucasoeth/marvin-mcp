@@ -29,20 +29,31 @@ export const find = defineOp({
   positional: "query",
   async run({ query, includeDone, limit }, ctx) {
     const needle = query.toLowerCase();
-    const matches = (await ctx.repo.allTasks())
+    const { tasks, unreadable } = await ctx.repo.allTasks();
+    const matches = tasks
       .filter((t) => includeDone || !t.done)
       .filter(
         (t) =>
           t.title.toLowerCase().includes(needle) ||
           (t.note?.toLowerCase().includes(needle) ?? false)
       );
-    return { query, total: matches.length, tasks: matches.slice(0, limit) };
+    return {
+      query,
+      total: matches.length,
+      tasks: matches.slice(0, limit),
+      unreadable,
+    };
   },
-  render({ query, total, tasks }) {
-    if (total === 0) return `no tasks matching "${query}"`;
+  render({ query, total, tasks, unreadable }) {
+    // Never report "not found" as though the search were complete.
+    const caveat = unreadable.length
+      ? `\n  warning: ${unreadable.length} container(s) could not be read, ` +
+        `so this result may be incomplete`
+      : "";
+    if (total === 0) return `no tasks matching "${query}"${caveat}`;
     const shown = tasks.map((t: Task) => "  " + formatTask(t)).join("\n");
     const truncated =
       total > tasks.length ? `\n  ...${total - tasks.length} more` : "";
-    return `${total} matching "${query}"\n${shown}${truncated}`;
+    return `${total} matching "${query}"\n${shown}${truncated}${caveat}`;
   },
 });
