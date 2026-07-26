@@ -4,6 +4,19 @@ Personal task management for Amazing Marvin, as a CLI and an MCP server. Single
 user. The CLI is the primary surface; the MCP server exists for clients with no
 shell.
 
+## Install
+
+```bash
+npm install -g .        # from a clone
+marvin auth --api-token <t> --full-access-token <t>
+```
+
+Credentials resolve from the environment first, then
+`~/.marvin/config.json` (`$MARVIN_HOME` overrides the directory). The file is
+written 0600 and merged on each `auth` call, so sync credentials can be added
+later without repeating the tokens. Not published to npm: it is one person's
+account-shaped tool, and `files` plus `private: true` say so.
+
 ## Using it
 
 If you have shell access, use the CLI. It is the same surface as the MCP tools.
@@ -85,6 +98,15 @@ An op declares:
 | `positional` | which input key may be given positionally on the CLI |
 | `run` | the work |
 | `render` | human output; `--json` bypasses it |
+| `cliOnly` | omit from MCP. Only for ops that configure the client, never for capabilities |
+
+`auth` is the only `cliOnly` op. The remote MCP server is reachable over the
+network, so a tool that writes credentials to its disk is a footgun. It is
+filtered from `callOp` as well as from the tool list, so guessing the name does
+not work.
+
+`marvin auth` has to run before credentials exist, so the CLI builds `Ctx`
+lazily: an op that touches no field of it never triggers the load.
 
 ### Marvin API landmines
 

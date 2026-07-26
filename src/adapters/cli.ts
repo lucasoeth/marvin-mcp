@@ -93,6 +93,28 @@ function addOptions(command: Command, op: Op<any, any>, skip?: string) {
   }
 }
 
+/**
+ * Defers building the context until an op actually reaches for it.
+ *
+ * `marvin auth` has to run when no credentials exist yet, and building the
+ * context eagerly would fail before it got the chance. An op that touches
+ * nothing on `Ctx` never triggers the load; every other op behaves as before,
+ * including the ConfigError it raises when credentials are missing.
+ */
+function lazyCtx(factory: () => Ctx): Ctx {
+  let built: Ctx | undefined;
+  const get = () => (built ??= factory());
+  return {
+    get repo() {
+      return get().repo;
+    },
+    get journal() {
+      return get().journal;
+    },
+    now: () => get().now(),
+  };
+}
+
 async function execute(
   op: Op<any, any>,
   raw: Record<string, unknown>,
@@ -114,7 +136,7 @@ async function execute(
     throw new Error(`Invalid arguments for "${op.name}":\n${issues}`);
   }
 
-  const output = await op.run(parsed.data, ctxFactory());
+  const output = await op.run(parsed.data, lazyCtx(ctxFactory));
   process.stdout.write(
     (json ? JSON.stringify(output, null, 2) : op.render(output)) + "\n"
   );

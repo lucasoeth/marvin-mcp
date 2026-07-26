@@ -24,8 +24,11 @@ export function toolNameFor(op: Op<any, any>): string {
   return TOOL_PREFIX + op.name;
 }
 
+/** Ops the MCP surface exposes. See `Op.cliOnly` for why anything is excluded. */
+const exposed = () => ops.filter((op) => !op.cliOnly);
+
 export function toolsFromRegistry(): Tool[] {
-  return ops.map((op) => ({
+  return exposed().map((op) => ({
     name: toolNameFor(op),
     description: op.details ? `${op.summary}. ${op.details}` : op.summary,
     inputSchema: schemaOf(op) as Tool["inputSchema"],
@@ -37,7 +40,9 @@ export async function callOp(
   args: unknown,
   ctx: Ctx
 ): Promise<CallToolResult> {
-  const op = ops.find((candidate) => toolNameFor(candidate) === name);
+  // Filtered, not just unlisted: a client that guesses the name of a cliOnly op
+  // must not be able to invoke it.
+  const op = exposed().find((candidate) => toolNameFor(candidate) === name);
   if (!op) {
     return errorResult(`Unknown tool: ${name}`);
   }

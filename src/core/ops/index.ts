@@ -8,6 +8,7 @@
 
 import type { Op } from "./types.js";
 import { apply } from "./apply.js";
+import { auth } from "./auth.js";
 import { brief } from "./brief.js";
 import { capture } from "./capture.js";
 import { complete } from "./complete.js";
@@ -23,6 +24,7 @@ export const ops: Op<any, any>[] = [
   hierarchy,
   apply,
   undo,
+  auth,
 ];
 
 export function findOp(name: string): Op<any, any> | undefined {

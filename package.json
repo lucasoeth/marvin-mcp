@@ -1,15 +1,28 @@
 {
   "name": "marvin-mcp",
   "version": "2.0.0",
-  "description": "MCP server for Amazing Marvin todo app",
+  "description": "Amazing Marvin as a CLI and an MCP server",
   "type": "module",
+  "private": true,
   "main": "dist/bin/marvin.js",
   "bin": {
     "marvin": "./dist/bin/marvin.js",
     "marvin-mcp": "./dist/bin/marvin-mcp.js"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lucasoeth/marvin-mcp.git"
+  },
   "scripts": {
     "build": "tsc",
+    "prepare": "tsc",
     "dev": "tsc --watch",
     "marvin": "node dist/bin/marvin.js",
     "mcp": "node dist/bin/marvin-mcp.js",

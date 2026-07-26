@@ -33,6 +33,16 @@ export interface Op<I = unknown, O = unknown> {
    * `marvin capture "buy milk"` works instead of `--text "buy milk"`.
    */
   positional?: string;
+  /**
+   * Exclude from the MCP surface.
+   *
+   * This is a deliberate hole in "the two surfaces cannot drift", and it is only
+   * for ops that configure the client rather than act on Marvin. The remote MCP
+   * server is reachable over the network, so a tool that writes credentials to
+   * its disk is a footgun with no matching benefit. Do not reach for this to
+   * make an ordinary capability CLI-only.
+   */
+  cliOnly?: boolean;
   run(input: I, ctx: Ctx): Promise<O>;
   /** Human-readable rendering. `--json` bypasses this and prints the raw output. */
   render(output: O): string;
