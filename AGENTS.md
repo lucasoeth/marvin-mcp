@@ -111,9 +111,17 @@ away.
   restriction after human review, which makes it more dangerous to ignore, not
   less. Budget accordingly: `brief` costs 3 requests, `find` costs 22 on this
   account and fires them concurrently.
-- **There is no search endpoint and no bulk export.** `find` crawls the container
-  tree and filters locally because there is no alternative. It is slow by nature
-  and expensive against the rate limit; do not put it in a loop.
+- **The public API has no search endpoint and no bulk export**, so without sync
+  credentials `find` crawls the container tree. Two consequences worth knowing:
+  the crawl is expensive against the rate limit, and `/children` does not return
+  completed tasks, so the crawl cannot see completion history at all (measured:
+  53 tasks visible via crawl, 354 via the database).
+- **`MARVIN_SYNC_*` enables a read-only fast path.** Marvin's sync database is a
+  real CouchDB, so `find` becomes one Mango query instead of ~22 requests, and it
+  sees everything including completed work. `Repo` picks this automatically when
+  the credentials are present and falls back to the crawl when they are not.
+  Reads only — writes stay on the public API, which owns conflict resolution and
+  the reward/kudos side effects that writing directly would bypass.
 - **Writes must carry `fieldUpdates.<field>` timestamps.** Marvin resolves
   multi-device conflicts per field by comparing them, and the public API does not
   maintain them for you. `updateRaw` handles this. Omitting it means an edit from

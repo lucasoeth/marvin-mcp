@@ -59,8 +59,8 @@ export async function resolveTask(
   if (found.length === 1) return found[0];
   if (found.length > 1) throw ambiguous(needle, found);
 
-  // Falling back to the full crawl, which can come back incomplete.
-  const { tasks: all, unreadable } = await ctx.repo.allTasks();
+  // Widen the search. One query with sync credentials, a crawl without.
+  const { tasks: all, unreadable } = await ctx.repo.everyTask();
   const byId = all.find((t) => t.id === needle);
   if (byId) return byId;
 

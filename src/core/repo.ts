@@ -7,6 +7,7 @@
 
 import type { MarvinClient } from "./client.js";
 import { marvinTimeZoneOffset } from "./client.js";
+import { regexEscape, SyncDb } from "./sync.js";
 import {
   type Container,
   type Label,
@@ -23,7 +24,60 @@ import {
 type Raw = Record<string, unknown>;
 
 export class Repo {
-  constructor(private readonly client: MarvinClient) {}
+  constructor(
+    private readonly client: MarvinClient,
+    /** Optional read-only fast path. Absent is a supported configuration. */
+    private readonly sync: SyncDb | null = null
+  ) {}
+
+  /**
+   * Search titles and notes.
+   *
+   * With sync credentials this is one Mango query. Without them it is the
+   * container crawl, which is slow and can come back incomplete — hence the
+   * `unreadable` list.
+   */
+  async searchTasks(
+    query: string,
+    includeDone: boolean
+  ): Promise<{ tasks: Task[]; unreadable: string[] }> {
+    if (this.sync) {
+      const pattern = `(?i).*${regexEscape(query)}.*`;
+      const selector: Record<string, unknown> = {
+        db: "Tasks",
+        $or: [{ title: { $regex: pattern } }, { note: { $regex: pattern } }],
+      };
+      if (!includeDone) selector.done = { $ne: true };
+      const docs = await this.sync.find<Raw>({ selector });
+      return { tasks: docs.map(toTask), unreadable: [] };
+    }
+
+    const { tasks, unreadable } = await this.allTasks();
+    const needle = query.toLowerCase();
+    return {
+      tasks: tasks
+        .filter((t) => includeDone || !t.done)
+        .filter(
+          (t) =>
+            t.title.toLowerCase().includes(needle) ||
+            (t.note?.toLowerCase().includes(needle) ?? false)
+        ),
+      unreadable,
+    };
+  }
+
+  /** Every task, for resolution fallbacks. One query when sync is available. */
+  async everyTask(): Promise<{ tasks: Task[]; unreadable: string[] }> {
+    if (this.sync) {
+      const docs = await this.sync.find<Raw>({ selector: { db: "Tasks" } });
+      return { tasks: docs.map(toTask), unreadable: [] };
+    }
+    return this.allTasks();
+  }
+
+  get hasFastPath(): boolean {
+    return this.sync !== null;
+  }
 
   // -------------------------------------------------------------- reads
 

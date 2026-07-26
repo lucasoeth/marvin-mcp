@@ -5,6 +5,7 @@
 import { MarvinClient } from "./client.js";
 import { Journal } from "./journal.js";
 import { Repo } from "./repo.js";
+import { SyncDb, syncConfigFrom } from "./sync.js";
 import type { Ctx } from "./ops/types.js";
 
 export class ConfigError extends Error {}
@@ -28,8 +29,9 @@ export function loadCtx(env: NodeJS.ProcessEnv = process.env): Ctx {
   }
 
   const client = new MarvinClient({ apiToken, fullAccessToken });
+  const syncConfig = syncConfigFrom(env);
   return {
-    repo: new Repo(client),
+    repo: new Repo(client, syncConfig ? new SyncDb(syncConfig) : null),
     journal: new Journal(),
     now: () => new Date(),
   };

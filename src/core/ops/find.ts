@@ -1,10 +1,12 @@
 /**
  * Search escape hatch.
  *
- * Marvin documents no search endpoint and no bulk export, so this crawls the
- * container tree and filters locally. That is genuinely the only option, not
- * laziness. It is the slowest op by a wide margin, hence not part of the daily
- * loop.
+ * Marvin's public API documents no search endpoint, so without sync credentials
+ * this crawls the container tree and filters locally — slow, and reported as
+ * possibly incomplete when containers fail to read.
+ *
+ * With MARVIN_SYNC_* set it is a single Mango query against the CouchDB sync
+ * database instead: complete, deterministic, and roughly 500ms.
  */
 
 import { z } from "zod";
@@ -28,19 +30,11 @@ export const find = defineOp({
   mutates: false,
   positional: "query",
   async run({ query, includeDone, limit }, ctx) {
-    const needle = query.toLowerCase();
-    const { tasks, unreadable } = await ctx.repo.allTasks();
-    const matches = tasks
-      .filter((t) => includeDone || !t.done)
-      .filter(
-        (t) =>
-          t.title.toLowerCase().includes(needle) ||
-          (t.note?.toLowerCase().includes(needle) ?? false)
-      );
+    const { tasks, unreadable } = await ctx.repo.searchTasks(query, includeDone);
     return {
       query,
-      total: matches.length,
-      tasks: matches.slice(0, limit),
+      total: tasks.length,
+      tasks: tasks.slice(0, limit),
       unreadable,
     };
   },
