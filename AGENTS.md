@@ -155,6 +155,20 @@ away.
 Reference: [Marvin API](https://github.com/amazingmarvin/MarvinAPI/wiki/Marvin-API)
 and [data types](https://github.com/amazingmarvin/MarvinAPI/wiki/Marvin-Data-Types).
 
+### Dependency notes
+
+`package.json` pins `@hono/node-server` forward via `overrides`. It arrives
+transitively through the MCP SDK, and versions below 2.0.5 carry
+GHSA-frvp-7c67-39w9, a path traversal in `serve-static` on Windows. Nothing here
+serves static files, so it is unreachable, but a public repo reporting
+vulnerabilities is its own problem.
+
+Do not run `npm audit fix --force` to resolve it. Its remedy is to downgrade
+`@modelcontextprotocol/sdk` to 1.24.3, which reinstates GHSA-345p-7cg4-v4c7, a
+cross-client data leak affecting 1.3.0 through 1.25.3. Trading a Windows-only
+static-file bug we cannot hit for a live data leak we can is a bad trade. Drop
+the override once the SDK depends on >= 2.0.5 itself.
+
 ### Testing against a real account
 
 There is no Marvin sandbox, so any manual verification runs against somebody's

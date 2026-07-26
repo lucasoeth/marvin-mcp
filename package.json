@@ -16,6 +16,10 @@
   "publishConfig": {
     "access": "public"
   },
+  "overridesReason": "@hono/node-server is pinned forward for GHSA-frvp-7c67-39w9. See AGENTS.md > Dependency notes.",
+  "overrides": {
+    "@hono/node-server": "^2.0.12"
+  },
   "engines": {
     "node": ">=20"
   },
