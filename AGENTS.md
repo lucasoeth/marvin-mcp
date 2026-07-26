@@ -145,9 +145,35 @@ Never modify a pre-existing document.
 ## Deliberately not supported
 
 Habits, goals, trackers, rewards, kudos, time tracking, recurring tasks,
-subtasks, dependencies, snoozing, time blocks and daily sections. An audit of the
-real account found all of them unused. The model exposes nine task fields out of
-roughly seventy. Adding one back is easy; carrying all seventy was the problem
-with the previous version.
+subtasks, dependencies, snoozing, time blocks and daily sections. The model
+exposes nine task fields out of roughly seventy. Adding one back is easy;
+carrying all seventy was the problem with the previous version.
+
+What the database actually shows, which is more nuanced than "unused":
+
+- **Habits and time blocks were tried and abandoned.** 6 habit documents with
+  real history, last recorded mid-to-late 2025; 158 planner items, all from
+  Jan-Feb 2025. Not built because they were dropped, not because they were never
+  reached for.
+- **Rewards, kudos and recurring tasks are genuinely unused.** Zero
+  `RecurringTasks` documents and no reward or kudos state in `ProfileItems`.
+- **Task completion ran until 2026-04-13** and then stopped. 300 completed tasks
+  exist; the public API cannot see any of them.
+
+## Why writes still go through the public API
+
+Reads are strictly better via the database, but writes are not:
+
+- `/addTask` resolves inline `+today` / `+tomorrow` server-side. Writing
+  documents directly means reimplementing date-phrase parsing.
+- `/markDone` has observable side effects beyond `done` — it was measured
+  mutating `day` from `unassigned` to today, and setting `doneAt`.
+- A task created via `/addTask` comes back with ~37 populated fields
+  (`masterRank`, `rank`, `firstScheduled`, `dailySection`, ...) that Marvin's own
+  clients likely assume exist.
+
+For anything the API lacks an endpoint for, use `/doc/create` with the
+full-access token rather than reaching for the database. That is how a category
+would be created, since `/addCategory` returns 404.
 
 Design rationale lives in `docs/superpowers/specs/`.
