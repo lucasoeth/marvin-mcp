@@ -27,7 +27,9 @@ export const undo = defineOp({
   name: "undo",
   summary: "Revert the last change set",
   input,
-  mutates: false, // deliberately not journalled: undoing an undo is confusing
+  // Writes to Marvin, so clients must treat it as a change. It deliberately
+  // journals nothing of its own: an undo of an undo is worse than no undo.
+  mutates: true,
   async run({ dryRun }, ctx) {
     const entry = await ctx.journal.lastUndoable();
     if (!entry) return { reverted: 0, op: null, details: [], skipped: [] };

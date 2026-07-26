@@ -96,6 +96,14 @@ marvin hierarchy                          # your projects and categories
 marvin undo                               # take back the last change
 ```
 
+> **One thing to know about `marvin find`.** Marvin's API has no search endpoint,
+> so search has to walk your whole project tree — about 22 requests per search,
+> against an allowance of 1440 a day. Occasional searching is completely fine.
+> Searching in a loop is not, and Marvin enforces its limit by restricting
+> accounts rather than by returning an error, so you'd find out the slow way.
+> If you search a lot, add the [sync credentials](#faster-search-optional) and
+> it drops to one request.
+
 `marvin complete` accepts part of a title, so you don't have to look anything up.
 If the fragment matches more than one task it stops and shows you the options
 rather than guessing.
@@ -184,12 +192,20 @@ API_KEY=some-long-random-string npm run mcp:remote
 ```
 
 It refuses to start without `API_KEY`, because it's internet-reachable and has
-write access to your tasks. Clients authenticate with `?token=<API_KEY>`.
-Generate a real random string for this, and don't reuse a password.
+write access to your tasks. Generate a real random string for it and don't reuse
+a password.
+
+Clients authenticate with `Authorization: Bearer <API_KEY>`. A `?token=<API_KEY>`
+query parameter also works, for hosted clients that can't set headers, but prefer
+the header where you have the choice: keys in URLs end up in access logs, proxy
+logs and `Referer` headers, and you can't un-leak a key once a log has shipped
+somewhere.
 
 </details>
 
 ---
+
+<a id="faster-search-optional"></a>
 
 ## Faster search (optional)
 
@@ -212,10 +228,25 @@ marvin auth \
 This is read-only. Every write still goes through the official API, because that's
 what handles conflict resolution when you're also editing on your phone.
 
-**A note on rate limits:** Marvin's API allows 1440 requests a day. Normal use is
-nowhere near that — `marvin` costs 3 requests. But `marvin find` without sync
-credentials costs 22 each time, so if you search constantly, add the sync
-credentials or you'll eventually hit the ceiling.
+---
+
+## Your data
+
+Worth being explicit, since this asks for tokens to your task list:
+
+- It runs entirely on your own machine. There is no server of mine involved.
+- It talks to exactly two places: Amazing Marvin's API, and — only if you set up
+  the optional sync credentials — Amazing Marvin's sync database. Nothing else.
+- Your tokens are stored in `~/.marvin/config.json` with permissions that make
+  the file readable only by your user account. They're never transmitted
+  anywhere except to Amazing Marvin.
+- No telemetry, no analytics, no crash reporting, no phoning home. Nothing about
+  you or your tasks is ever sent to me.
+- `~/.marvin/journal.jsonl` keeps a local record of changes so `marvin undo`
+  works. It stays on your machine. Delete it whenever you like.
+
+If you connect it to Claude, then Claude sees whatever tasks it reads — that's
+the point of connecting it, but it's worth saying out loud.
 
 ---
 

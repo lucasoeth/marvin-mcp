@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a capability
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth knowing before you write: this deliberately exposes nine of
+        Marvin's ~70 task fields, and leaves out habits, goals, trackers,
+        rewards, time tracking, recurring tasks, subtasks, dependencies,
+        snoozing and time blocks. A small surface is what makes it safe to hand
+        to an AI assistant with write access.
+
+        That is not a permanent no. It does mean a request to add one is more
+        persuasive if it says what you were trying to do.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What were you trying to do
+      description: The task you were attempting, not the feature you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: Optional. If you already have a shape in mind, describe it.
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do instead today
+      description: Optional, but useful for judging how much this hurts.

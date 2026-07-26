@@ -105,12 +105,28 @@ app.use((req, res, next) => {
   next();
 });
 
+/**
+ * Prefer `Authorization: Bearer <key>`; accept `?token=` as a fallback.
+ *
+ * The query parameter is the weaker option and is only still here because some
+ * hosted MCP clients cannot set headers on the connection. A key in a URL leaks
+ * into access logs, proxy logs, browser history and Referer headers, and there
+ * is no way to un-leak it once a log ships somewhere. Anything that can send a
+ * header should.
+ *
+ * The request logger above deliberately prints `req.path` rather than
+ * `req.url`, because `req.url` includes the query string and would write the
+ * key straight into this server's own logs.
+ */
 function authenticate(
   req: express.Request,
   res: express.Response,
   next: express.NextFunction
 ) {
-  const provided = req.query.token;
+  const header = req.header("authorization");
+  const bearer = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+  const provided = bearer ?? req.query.token;
+
   if (typeof provided !== "string" || !timingSafeEqual(provided, API_KEY!)) {
     res.status(401).json({ error: "Invalid or missing token" });
     return;

@@ -27,11 +27,28 @@ export function toolNameFor(op: Op<any, any>): string {
 /** Ops the MCP surface exposes. See `Op.cliOnly` for why anything is excluded. */
 const exposed = () => ops.filter((op) => !op.cliOnly);
 
+/**
+ * Annotations come straight from `mutates`, so they cannot disagree with what
+ * the op actually does. Clients use these to decide what needs confirming.
+ *
+ * `destructiveHint` is true for every writing op rather than only `delete`,
+ * because rescheduling twelve tasks is destructive in the sense clients care
+ * about: it overwrites state the user did not hand over in this request.
+ * `idempotentHint` is false throughout — `capture` creates a second task if you
+ * call it twice, and `complete` sets `doneAt` afresh.
+ */
 export function toolsFromRegistry(): Tool[] {
   return exposed().map((op) => ({
     name: toolNameFor(op),
     description: op.details ? `${op.summary}. ${op.details}` : op.summary,
     inputSchema: schemaOf(op) as Tool["inputSchema"],
+    annotations: {
+      title: op.summary,
+      readOnlyHint: !op.mutates,
+      destructiveHint: op.mutates,
+      idempotentHint: false,
+      openWorldHint: true, // talks to Marvin's hosted API
+    },
   }));
 }
 

@@ -26,7 +26,18 @@ export interface Op<I = unknown, O = unknown> {
   details?: string;
   /** Validates CLI flags and MCP arguments alike. */
   input: z.ZodType<I>;
-  /** When true the runner wraps the call in a journal entry so `undo` can revert it. */
+  /**
+   * True when the op changes data in the user's Marvin account.
+   *
+   * This drives the MCP `readOnlyHint`/`destructiveHint` annotations, which is
+   * how a client decides whether to ask the user before calling. Get it wrong
+   * in the false direction and an assistant rewrites tasks without confirming.
+   *
+   * It is not the same question as "does this journal for undo". `undo` writes
+   * to Marvin and is therefore `true`, but journals nothing, because an undo of
+   * an undo is a worse user experience than no undo at all. `auth` writes only
+   * to local config and is `false`.
+   */
   mutates: boolean;
   /**
    * Name of the input key that may be supplied positionally on the CLI, so

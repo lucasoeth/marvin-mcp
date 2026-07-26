@@ -94,11 +94,17 @@ An op declares:
 | `name` | `brief` becomes `marvin brief` and tool `marvin_brief` |
 | `summary` | `--help` text and the MCP tool description, one source |
 | `input` | zod schema; validates CLI flags and MCP arguments alike |
-| `mutates` | `true` means it must journal before-state for undo |
+| `mutates` | `true` means it changes data in the Marvin account |
 | `positional` | which input key may be given positionally on the CLI |
 | `run` | the work |
 | `render` | human output; `--json` bypasses it |
 | `cliOnly` | omit from MCP. Only for ops that configure the client, never for capabilities |
+
+`mutates` feeds the MCP `readOnlyHint` and `destructiveHint` annotations, which
+is how a client decides whether to confirm with the user before calling. It is
+not the same question as "does this journal for undo": `undo` writes to Marvin
+so it is `true`, but journals nothing itself. Ops journal inside their own `run`;
+nothing in the framework does it for them.
 
 `auth` is the only `cliOnly` op. The remote MCP server is reachable over the
 network, so a tool that writes credentials to its disk is a footgun. It is

@@ -1,0 +1,70 @@
+name: Bug report
+description: Something behaved differently than you expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not paste your Marvin tokens, your sync
+        password, or the contents of `~/.marvin/config.json` into this issue.
+        Task titles from your account are fine to redact too.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran, and what you expected instead.
+      placeholder: |
+        I ran: marvin complete "dentist"
+        I expected it to mark the task done.
+        Instead it said ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: Paste the command and its output. Redact anything private.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "Output of: marvin --version"
+      placeholder: "2.0.1"
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      description: "Output of: node --version"
+      placeholder: "v20.19.6"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did this happen
+      options:
+        - CLI
+        - MCP server (Claude Desktop, Claude Code, etc.)
+        - Remote HTTP server
+    validations:
+      required: true
+
+  - type: dropdown
+    id: sync
+    attributes:
+      label: Do you have the optional sync credentials configured?
+      description: "`marvin auth` lists what is set, without showing values."
+      options:
+        - "No"
+        - "Yes"
+        - "Not sure"
+    validations:
+      required: true
