@@ -7,12 +7,10 @@
  */
 
 import type { z } from "zod";
-import type { Journal } from "../journal.js";
 import type { Repo } from "../repo.js";
 
 export interface Ctx {
   repo: Repo;
-  journal: Journal;
   /** Injected so tests can pin "today" without touching the clock. */
   now: () => Date;
 }
@@ -30,13 +28,13 @@ export interface Op<I = unknown, O = unknown> {
    * True when the op changes data in the user's Marvin account.
    *
    * This drives the MCP `readOnlyHint`/`destructiveHint` annotations, which is
-   * how a client decides whether to ask the user before calling. Get it wrong
-   * in the false direction and an assistant rewrites tasks without confirming.
+   * how a client decides whether to ask the user before calling. Those hints
+   * are the only thing standing between an agent and an unreviewed write, so
+   * get it wrong in the false direction and an assistant rewrites tasks without
+   * confirming.
    *
-   * It is not the same question as "does this journal for undo". `undo` writes
-   * to Marvin and is therefore `true`, but journals nothing, because an undo of
-   * an undo is a worse user experience than no undo at all. `auth` writes only
-   * to local config and is `false`.
+   * The question is strictly "does this change data in the Marvin account".
+   * `auth` writes only to local config and is therefore `false`.
    */
   mutates: boolean;
   /**

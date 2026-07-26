@@ -141,9 +141,11 @@ marvin                                    # what's today
 marvin capture "call the dentist"         # add a task
 marvin capture "file taxes +tomorrow"     # ...for tomorrow
 marvin complete "dentist"                 # tick it off
-marvin find "invoice"                     # search everything
+marvin tasks "invoice"                    # search everything
+marvin tasks --parent inbox               # your inbox
+marvin tasks --unscheduled                # captured, never given a day
 marvin hierarchy                          # your projects and categories
-marvin undo                               # take back the last change
+marvin apply --changes '[...]' --dry-run  # preview a batch before writing it
 ```
 
 `marvin complete` accepts part of a title, so you don't have to look anything up.
@@ -164,19 +166,19 @@ marvin capture "file taxes" --due-by 2026-09-01 --scheduled-for 2026-08-20
 
 Plan to start on August 20th. Hard deadline September 1st. Two different things.
 
-### Undo
+### Changes are immediate
 
-Changes happen immediately, with no "are you sure?". The safety net is that every
-change is written to a log first:
+There's no undo. A write goes straight to Marvin, and Marvin has no undo either,
+so a deletion in particular is permanent — recreating a task gives it a new id.
+Prefer completing or rescheduling a task over deleting it.
+
+Before committing a big batch, preview it:
 
 ```bash
-marvin undo
+marvin apply --changes '[...]' --dry-run
 ```
 
-That reverts the entire last change set — if Claude just rescheduled twelve
-tasks, `undo` puts all twelve back, not one of them. The one thing it can't
-reverse is a genuine deletion, because Marvin issues a new id when a task is
-recreated.
+That prints every change it would make and writes nothing.
 
 Add `--json` to any command if you want to pipe the output into something else.
 
@@ -219,8 +221,10 @@ Then just talk to it:
 > to my Work project with deadlines."*
 
 Claude can read and change your tasks, so treat it the way you'd treat an
-assistant with access to your calendar. `marvin undo` is there when it
-misunderstands you.
+assistant with access to your calendar. Every tool that writes is marked as
+destructive in the protocol, so a well-behaved MCP client shows you the call and
+waits for your approval before it runs — that approval is the check, because
+there's no undo afterwards.
 
 <details>
 <summary>Other MCP clients, and remote access from your phone</summary>
@@ -261,8 +265,6 @@ Worth being explicit, since this asks for tokens to your task list:
   anywhere except to Amazing Marvin.
 - No telemetry, no analytics, no crash reporting, no phoning home. Nothing about
   you or your tasks is ever sent to me.
-- `~/.marvin/journal.jsonl` keeps a local record of changes so `marvin undo`
-  works. It stays on your machine. Delete it whenever you like.
 
 If you connect it to Claude, then Claude sees whatever tasks it reads — that's
 the point of connecting it, but it's worth saying out loud.

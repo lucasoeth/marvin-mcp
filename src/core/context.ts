@@ -4,7 +4,6 @@
 
 import { MarvinClient } from "./client.js";
 import { configPath, resolveCredentials } from "./config.js";
-import { Journal } from "./journal.js";
 import { Repo } from "./repo.js";
 import { SyncDb, missingSyncKeys, syncConfigFrom } from "./sync.js";
 import type { Ctx } from "./ops/types.js";
@@ -43,7 +42,6 @@ export function loadCtx(env: NodeJS.ProcessEnv = process.env): Ctx {
   });
   return {
     repo: new Repo(client, new SyncDb(syncConfig)),
-    journal: new Journal(),
     now: () => new Date(),
   };
 }

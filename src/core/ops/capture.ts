@@ -87,9 +87,6 @@ export const capture = defineOp({
       priority: patch.priority as 0 | 1 | 2 | 3 | undefined,
       frog: patch.frog as 0 | 1 | 2 | 3 | undefined,
     });
-    await ctx.journal.record("capture", [
-      { id: task.id, before: null, after: { title: task.title } },
-    ]);
     return task;
   },
   render(task) {

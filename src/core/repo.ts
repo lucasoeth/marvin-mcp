@@ -23,6 +23,32 @@ import {
 
 type Raw = Record<string, unknown>;
 
+/**
+ * What `parent` means when you want the inbox rather than a container.
+ *
+ * Spelled as a word rather than exposing Marvin's `unassigned` sentinel,
+ * because "inbox" is what it is called everywhere a user can see it.
+ */
+export const INBOX = "inbox";
+
+/** Filters for `Repo.queryTasks`. All of them AND together. */
+export interface TaskFilter {
+  /** Substring of title or note, case-insensitive. */
+  query?: string;
+  /** Container id, or `INBOX` for tasks filed nowhere. */
+  parent?: string;
+  /** Only tasks with no day assigned. */
+  unscheduled?: boolean;
+  /** Only tasks with no deadline. */
+  noDeadline?: boolean;
+  scheduledFrom?: string;
+  scheduledTo?: string;
+  dueFrom?: string;
+  dueTo?: string;
+  /** Defaults to `open`. */
+  status?: "open" | "done" | "any";
+}
+
 export class Repo {
   constructor(
     private readonly client: MarvinClient,
@@ -39,16 +65,48 @@ export class Repo {
     private readonly sync: SyncDb
   ) {}
 
-  /** Search titles and notes. One Mango query. */
-  async searchTasks(query: string, includeDone: boolean): Promise<Task[]> {
-    const pattern = `(?i).*${regexEscape(query)}.*`;
-    const selector: Record<string, unknown> = {
-      db: "Tasks",
-      $or: [{ title: { $regex: pattern } }, { note: { $regex: pattern } }],
-    };
-    if (!includeDone) selector.done = { $ne: true };
-    const docs = await this.sync.find<Raw>({ selector });
-    return docs.map(toTask);
+  /**
+   * The general task query. One Mango request, whatever the filters.
+   *
+   * Every filter ANDs. No filters means every open task.
+   */
+  async queryTasks(
+    filter: TaskFilter
+  ): Promise<{ tasks: Task[]; warning?: string }> {
+    const and: Record<string, unknown>[] = [];
+
+    const status = filter.status ?? "open";
+    if (status === "open") and.push({ done: { $ne: true } });
+    if (status === "done") and.push({ done: true });
+
+    if (filter.query) {
+      const pattern = `(?i).*${regexEscape(filter.query)}.*`;
+      and.push({
+        $or: [{ title: { $regex: pattern } }, { note: { $regex: pattern } }],
+      });
+    }
+
+    if (filter.parent !== undefined) {
+      and.push(
+        filter.parent === INBOX ? absent("parentId") : { parentId: filter.parent }
+      );
+    }
+
+    if (filter.unscheduled) and.push(absent("day"));
+    if (filter.noDeadline) and.push(absent("dueDate"));
+
+    if (filter.scheduledFrom || filter.scheduledTo) {
+      and.push(between("day", filter.scheduledFrom, filter.scheduledTo));
+    }
+    if (filter.dueFrom || filter.dueTo) {
+      and.push(between("dueDate", filter.dueFrom, filter.dueTo));
+    }
+
+    const selector: Record<string, unknown> = { db: "Tasks" };
+    if (and.length) selector.$and = and;
+
+    const { docs, warning } = await this.sync.findWithMeta<Raw>({ selector });
+    return { tasks: docs.map(toTask), warning };
   }
 
   /** Every task, including completed ones. */
@@ -194,4 +252,39 @@ export class Repo {
 
 function asArray<T>(value: T[] | unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
+}
+
+/**
+ * "This field is empty", in all the shapes Marvin uses for it.
+ *
+ * `day` and `parentId` carry the literal string `unassigned` rather than null,
+ * `dueDate` is nulled outright, and a field can simply be absent on older
+ * documents. Testing only one of those is how a filter silently returns the
+ * wrong half of the account.
+ */
+function absent(field: string): Record<string, unknown> {
+  return {
+    $or: [
+      { [field]: { $exists: false } },
+      { [field]: null },
+      { [field]: "" },
+      { [field]: UNASSIGNED },
+    ],
+  };
+}
+
+/**
+ * An inclusive date range on a YYYY-MM-DD field.
+ *
+ * Both bounds are always sent, even when the caller gave one. CouchDB compares
+ * these as strings, and `unassigned` sorts *above* every real date (`u` > `9`),
+ * so an open-ended `$gte: "2026-01-01"` would happily return every unscheduled
+ * task in the account. The upper sentinel is what excludes them.
+ */
+function between(
+  field: string,
+  from?: string,
+  to?: string
+): Record<string, unknown> {
+  return { [field]: { $gte: from ?? "0000-01-01", $lte: to ?? "9999-12-31" } };
 }

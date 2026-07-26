@@ -7,7 +7,7 @@
  */
 
 import { z } from "zod";
-import { MARK_DONE_FIELDS, snapshotFields, type Task } from "../model.js";
+import type { Task } from "../model.js";
 import { defineOp, type Ctx } from "./types.js";
 import { formatTask } from "./brief.js";
 
@@ -26,20 +26,6 @@ export const complete = defineOp({
   positional: "task",
   async run({ task: needle }, ctx) {
     const match = await resolveTask(needle, ctx);
-
-    // Snapshot before the write, and snapshot all three fields `/markDone`
-    // touches. It stamps `doneAt` and moves `day` from `unassigned` to today as
-    // well as setting `done`, so journalling `done` alone made undo restore one
-    // field of three and leave the task dated to the day it was completed.
-    const before = await ctx.repo.getRaw(match.id);
-    await ctx.journal.record("complete", [
-      {
-        id: match.id,
-        before: snapshotFields(before, MARK_DONE_FIELDS),
-        after: { done: true },
-      },
-    ]);
-
     await ctx.repo.markDone(match.id);
     return { ...match, done: true };
   },

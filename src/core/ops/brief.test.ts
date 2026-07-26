@@ -26,7 +26,6 @@ function ctxWith(today: Task[], due: Task[]): Ctx {
       today: async () => today,
       due: async () => due,
     } as unknown as Ctx["repo"],
-    journal: {} as Ctx["journal"],
     now: () => new Date(2026, 6, 26),
   };
 }

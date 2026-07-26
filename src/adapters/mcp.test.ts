@@ -46,15 +46,8 @@ describe("tool annotations", () => {
     }
   });
 
-  it("marks undo as a write", () => {
-    // Regression guard. `mutates` used to mean "journals for undo", under which
-    // undo was false — advertising to every client that reverting a change set
-    // is read-only and safe to call unattended. It writes to Marvin.
-    expect(byName.get("marvin_undo")?.annotations?.readOnlyHint).toBe(false);
-  });
-
   it("leaves the read-only ops read-only", () => {
-    for (const name of ["marvin_brief", "marvin_find", "marvin_hierarchy"]) {
+    for (const name of ["marvin_brief", "marvin_tasks", "marvin_hierarchy"]) {
       expect(byName.get(name)?.annotations?.readOnlyHint, name).toBe(true);
     }
   });
@@ -68,7 +61,6 @@ describe("result shape", () => {
     // half of all clients never saw a render(). See callOp for the detail.
     const stub = {
       repo: { today: async () => [], due: async () => [] },
-      journal: {},
       now: () => new Date("2026-07-26T12:00:00Z"),
     } as unknown as Ctx;
 

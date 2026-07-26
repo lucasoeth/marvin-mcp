@@ -144,18 +144,17 @@ TWO DATE FIELDS, easily confused and costly to get wrong:
 dueBy when scheduledFor was meant moves a real deadline; the reverse silently
 reschedules work. If a request is genuinely ambiguous, ask rather than guess.
 
-BATCH WRITES with marvin_apply rather than several single calls: it commits one
-change set, so marvin_undo reverts the whole plan and not a twelfth of it.
-Preview large sets with dryRun.
+BATCH WRITES with marvin_apply rather than several single calls: one ordered
+set, one round trip, and the user sees the whole plan before approving it.
 
-UNDO: marvin_undo reverts the last change set, but cannot restore a genuine
-deletion, because Marvin issues a new id on recreate. Prefer completing or
-rescheduling over deleting.
+There is no undo. A write lands immediately and Marvin cannot revert it, and a
+deletion is permanent because Marvin issues a new id on recreate. Prefer
+completing or rescheduling over deleting.
 
-COST: marvin_find is one database query, free against Marvin's API budget, so
-search freely. Writes are not free: the cap is 1440/day and Marvin enforces it
-by restricting the account rather than returning an error, so never write in a
-loop.
+READS are free: marvin_tasks is one database query however it is filtered, so
+read freely. Reach for parent="inbox" and unscheduled=true to see work that
+marvin_brief cannot. Writes do count, against 1440/day that Marvin enforces by
+restricting the account rather than erroring, so never write in a loop.
 
 WHEN PLANNING:
 - Do not silently reschedule everything. If the day is overcommitted, say so and

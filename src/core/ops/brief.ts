@@ -82,7 +82,7 @@ export const brief = defineOp({
   /**
    * Today leads. Overdue follows, and past a couple of weeks it collapses to a
    * count rather than a list — a backlog you can scroll is a chore, a number is
-   * a fact. `find` will list them if you actually want them.
+   * a fact. `tasks` will list them if you actually want them.
    */
   render(brief) {
     const lines: string[] = [`${brief.date}`];

@@ -12,18 +12,16 @@ import { auth } from "./auth.js";
 import { brief } from "./brief.js";
 import { capture } from "./capture.js";
 import { complete } from "./complete.js";
-import { find } from "./find.js";
+import { tasks } from "./tasks.js";
 import { hierarchy } from "./hierarchy.js";
-import { undo } from "./undo.js";
 
 export const ops: Op<any, any>[] = [
   brief,
   capture,
   complete,
-  find,
+  tasks,
   hierarchy,
   apply,
-  undo,
   auth,
 ];
 

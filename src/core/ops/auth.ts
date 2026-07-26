@@ -48,7 +48,7 @@ export const auth = defineOp({
     "without repeating the tokens. Environment variables still take precedence " +
     "over the file. With no arguments, reports what is currently configured.",
   input,
-  mutates: false, // Touches local config, not Marvin. Nothing for `undo` to revert.
+  mutates: false, // Touches local config, not the Marvin account.
   cliOnly: true,
   async run(args) {
     const values: Record<string, string> = {};

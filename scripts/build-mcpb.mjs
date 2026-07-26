@@ -98,8 +98,8 @@ const manifest = {
     "Read and write your Amazing Marvin tasks from Claude: what is on today, " +
     "what is overdue, capturing tasks, and planning or rescheduling a day. " +
     "Runs entirely on your own machine against your own Marvin account. " +
-    "Nothing is uploaded anywhere, and every change it makes can be reverted " +
-    "with a single undo.",
+    "Nothing is uploaded anywhere, and every tool that writes is marked " +
+    "destructive so Claude asks before it changes anything.",
   author: { name: pkg.author },
   repository: { type: "git", url: pkg.repository.url },
   homepage: pkg.homepage,

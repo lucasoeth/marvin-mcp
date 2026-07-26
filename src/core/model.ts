@@ -186,41 +186,6 @@ export function addDays(date: string, days: number): string {
   return today(shifted);
 }
 
-/**
- * The wire fields `/markDone` mutates.
- *
- * It is not just `done`. Marvin also stamps `doneAt`, and moves `day` from
- * `unassigned` to today, so a journal entry that records only `done` restores
- * one field of three and leaves the task dated to whenever it was completed.
- */
-export const MARK_DONE_FIELDS = ["done", "doneAt", "day"] as const;
-
-/**
- * These two use the `unassigned` string sentinel rather than null, so a
- * document that is missing them has to be snapshotted as `unassigned`. Writing
- * null back into `parentId` files the task under no container at all, which is
- * not the same as the inbox and is not somewhere it can be found again.
- */
-const SENTINEL_FIELDS = new Set<string>(["day", "parentId"]);
-
-/**
- * Snapshot the named wire fields of a raw document for the journal.
- *
- * Only the keys about to change: storing the whole document would make the
- * journal enormous and would risk undo clobbering unrelated concurrent edits.
- */
-export function snapshotFields(
-  source: Record<string, unknown>,
-  keys: readonly string[]
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const key of keys) {
-    out[key] =
-      source[key] ?? (SENTINEL_FIELDS.has(key) ? UNASSIGNED : null);
-  }
-  return out;
-}
-
 /** Strict YYYY-MM-DD validation that rejects rollovers like 2024-02-31. */
 export function isValidDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;

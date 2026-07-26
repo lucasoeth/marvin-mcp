@@ -79,8 +79,25 @@ export class SyncDb {
    * truncated at CouchDB's default page size.
    */
   async find<T>(query: MangoQuery): Promise<T[]> {
+    return (await this.findWithMeta<T>(query)).docs;
+  }
+
+  /**
+   * As `find`, but keeps CouchDB's `warning`.
+   *
+   * The warning is how "no matching index found, create an index to optimize
+   * query time" reaches us. There is no index on `day` or `parentId`, so the
+   * filtered queries behind `tasks` are full scans. That is fine at this size
+   * and still one request against a rate limit that a tree crawl would spend
+   * twenty-two on — but it should be visible rather than silently discarded,
+   * because the day it stops being fine, the only symptom is slowness.
+   */
+  async findWithMeta<T>(
+    query: MangoQuery
+  ): Promise<{ docs: T[]; warning?: string }> {
     const pageSize = query.limit ?? 500;
     const out: T[] = [];
+    let warning: string | undefined;
     let bookmark: string | undefined;
 
     // Bounded so a bookmark that stops advancing cannot spin forever.
@@ -89,10 +106,11 @@ export class SyncDb {
       const response = await this.request("/_find", body);
       const parsed = JSON.parse(response) as MangoResponse<T>;
       out.push(...parsed.docs);
+      warning ??= parsed.warning;
       if (parsed.docs.length < pageSize || !parsed.bookmark) break;
       bookmark = parsed.bookmark;
     }
-    return out;
+    return { docs: out, warning };
   }
 
   /** Cheap liveness probe, used to decide whether the fast path is usable. */

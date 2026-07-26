@@ -25,10 +25,9 @@ If you have shell access, use the CLI. It is the same surface as the MCP tools.
 marvin                          # today's brief — start here
 marvin capture "call dentist +tomorrow #Health"
 marvin complete "dentist"       # id or title fragment
-marvin find "invoice"
+marvin tasks "invoice"          # general read: query, parent, dates, status
 marvin hierarchy                # projects and categories, with ids
 marvin apply --changes '[...]'  # batch write
-marvin undo                     # revert the last change set
 ```
 
 Every command takes `--json` for machine-readable output. Use it when you need
@@ -47,26 +46,18 @@ overdue — `brief` calls those out separately.
 
 ### Writing
 
-Write authority is full: no confirmation prompts. The safety net is that every
-mutating op journals the before-state to `~/.marvin/journal.jsonl`, and
-`marvin undo` reverts the last change set.
+Write authority is full and there is no undo. A write lands in the account
+immediately, Marvin itself cannot revert it, and a deletion is permanent because
+Marvin reissues ids on recreate. Prefer completing or rescheduling over
+deleting.
 
-Journal each change **before** its write, and record the set in a `finally`.
-Recording only on success meant a failure partway through a batch left the
-earlier writes committed and unjournalled, and the next `undo` reverted an
-older, unrelated change set. The residue this leaves is harmless in the safe
-direction: an entry for a write that then failed restores a before-state onto a
-document that never moved.
+What stands in for a safety net: MCP clients see every writing tool annotated
+`destructiveHint`, so they ask the user before the call runs, and on the CLI
+`apply --dry-run` renders the whole change set without writing any of it.
 
-Prefer `apply` over a sequence of individual writes. It commits one atomic change
-set, so `undo` reverts the whole plan rather than one twelfth of it. Use
-`--dry-run` first when the change set is large.
-
-`undo` deletes items that were created, and restores fields that were changed. It
-cannot restore a genuine deletion — Marvin reissues ids on recreate. It also
-leaves a created item alone if its `updatedAt` is newer than the change set,
-because "capture it, then add the note, then undo the capture" would otherwise
-destroy the note, and the note is the part that cannot be retyped from memory.
+Prefer `apply` over a sequence of individual writes. It is one ordered set the
+user can review in one go, and one round trip rather than twelve against a
+rate-limited account. Use `--dry-run` first when the change set is large.
 
 ## Working on the code
 
@@ -93,7 +84,6 @@ src/core/
   client.ts    HTTP, auth, error mapping. Knows nothing about the domain.
   model.ts     raw Marvin <-> domain mappers. The only file that knows the wire shape.
   repo.ts      domain-level reads and writes.
-  journal.ts   write-ahead log and undo.
   ops/         the registry — one file per op.
 src/adapters/
   cli.ts       registry -> commander commands
@@ -121,10 +111,10 @@ An op declares:
 | `cliOnly` | omit from MCP. Only for ops that configure the client, never for capabilities |
 
 `mutates` feeds the MCP `readOnlyHint` and `destructiveHint` annotations, which
-is how a client decides whether to confirm with the user before calling. It is
-not the same question as "does this journal for undo": `undo` writes to Marvin
-so it is `true`, but journals nothing itself. Ops journal inside their own `run`;
-nothing in the framework does it for them.
+is how a client decides whether to confirm with the user before calling. With no
+undo behind it, that confirmation is the only review a write gets, so an op that
+touches the Marvin account is `true` — `auth`, which writes only to local config,
+is the one write that is `false`.
 
 `auth` is the only `cliOnly` op. The remote MCP server is reachable over the
 network, so a tool that writes credentials to its disk is a footgun. It is
@@ -175,7 +165,7 @@ away.
   completion history through it at all (measured: 53 tasks reachable by crawling
   the tree, 354 in the database).
 - **`MARVIN_SYNC_*` is required, not optional.** Reads go to Marvin's sync
-  database, which is a real CouchDB, so `find` is one Mango query and sees
+  database, which is a real CouchDB, so `tasks` is one Mango query and sees
   everything including completed work.
 
   This used to be optional, with a tree crawl as the fallback. The crawl cost
@@ -191,14 +181,6 @@ away.
   multi-device conflicts per field by comparing them, and the public API does not
   maintain them for you. `updateRaw` handles this. Omitting it means an edit from
   the phone silently beats yours regardless of write order.
-- **`/markDone` mutates three fields, not one.** `done`, `doneAt`, and `day`
-  (from `unassigned` to today). A journal entry that records only `done`
-  restores one field of three and leaves the task dated to whenever it was
-  completed. `MARK_DONE_FIELDS` in `model.ts` is the list; use it.
-- **`day` and `parentId` use the `unassigned` string, so a journal snapshot of a
-  missing one cannot be `null`.** Writing `parentId: null` back files the task
-  under no container at all, which is not the inbox and is not somewhere it can
-  be found again. `snapshotFields()` handles this; do not hand-roll a `?? null`.
 - **The tree can contain cycles.** Any recursive walk needs a visited set.
 - **`/addCategory` is undocumented.** It is used by nothing right now; verify
   before relying on it.

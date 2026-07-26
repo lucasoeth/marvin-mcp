@@ -108,9 +108,6 @@ function lazyCtx(factory: () => Ctx): Ctx {
     get repo() {
       return get().repo;
     },
-    get journal() {
-      return get().journal;
-    },
     now: () => get().now(),
   };
 }
