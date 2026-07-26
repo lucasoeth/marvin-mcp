@@ -5,7 +5,7 @@ An MCP (Model Context Protocol) server for [Amazing Marvin](https://amazingmarvi
 ## Features
 
 ### Task Management
-- **Create tasks** - With support for inline syntax (`+today`, `#Category`, `@label`), priority levels, and frog marking
+- **Create tasks** - With support for inline syntax (`+today`, `#Category`, `@label`) and priority levels
 - **Get today's tasks** - View all tasks scheduled for today
 - **Get due tasks** - View overdue tasks
 - **Get inbox** - View unorganized tasks (no parent category/project)
@@ -135,7 +135,7 @@ For advanced features (multi-user, OAuth, etc.), see [REMOTE_DEPLOYMENT.md](./RE
 ### Task Tools
 | Tool | Description |
 |------|-------------|
-| `marvin_create_task` | Create a new task with scheduling, labels, priority, and frog marking |
+| `marvin_create_task` | Create a new task with scheduling, labels, and priority |
 | `marvin_get_today_tasks` | Get all tasks scheduled for today |
 | `marvin_get_due_tasks` | Get all overdue tasks |
 | `marvin_get_inbox` | Get tasks without a parent (inbox) |
@@ -159,7 +159,8 @@ For advanced features (multi-user, OAuth, etc.), see [REMOTE_DEPLOYMENT.md](./RE
 ### Organization Tools
 | Tool | Description |
 |------|-------------|
-| `marvin_get_categories` | List all categories |
+| `marvin_get_hierarchy` | List the full hierarchy of categories and projects |
+| `marvin_create_category` | Create a new category |
 | `marvin_get_labels` | List all labels |
 | `marvin_test_connection` | Test API connection |
 
@@ -196,9 +197,10 @@ Tasks support two priority systems:
 - `3` - Red star (high priority)
 
 ### Frog Priority (isFrogged) - "Eat the Frog"
-- `1` - Normal frog
-- `2` - Baby frog
-- `3` - Monster frog (most important task to tackle first)
+Marvin itself supports frog values (`1` normal, `2` baby, `3` monster), and the
+field is read back on tasks, but **this server does not currently expose it as a
+tool parameter** — you cannot set it via `marvin_create_task` or
+`marvin_update_task` yet.
 
 ## Environment Variables
 

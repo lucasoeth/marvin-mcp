@@ -113,9 +113,9 @@ Should return:
 
 ### Test with your API key:
 ```bash
-curl -X POST https://your-app.coolify.app/mcp \
-  -H "Authorization: Bearer your-api-key" \
+curl -X POST "https://your-app.coolify.app/mcp?token=your-api-key" \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -d '{
     "jsonrpc": "2.0",
     "method": "initialize",
