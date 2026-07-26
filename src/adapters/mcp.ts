@@ -136,9 +136,11 @@ UNDO: marvin_undo reverts the last change set. It cannot restore a genuine
 deletion, because Marvin issues a new id on recreate. Prefer completing or
 rescheduling a task over deleting it.
 
-COST: marvin_find is expensive, roughly 22 API requests against a 1440/day
-account budget, unless the user has configured sync credentials. Reach for
-marvin_brief for "what's on today", and never search in a loop.
+COST: reads are cheap. marvin_find is a single database query and does not
+count against Marvin's API budget, so search freely. Writes do count, against
+1440 requests/day that Marvin enforces by restricting the account rather than
+returning an error, so do not write in a loop. Use marvin_brief rather than
+marvin_find for "what's on today"; it answers directly.
 
 WHEN PLANNING:
 - Do not silently reschedule everything. If the day is overcommitted, say so and
