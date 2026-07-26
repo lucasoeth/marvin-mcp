@@ -155,14 +155,18 @@ away.
 Reference: [Marvin API](https://github.com/amazingmarvin/MarvinAPI/wiki/Marvin-API)
 and [data types](https://github.com/amazingmarvin/MarvinAPI/wiki/Marvin-Data-Types).
 
-### Testing against the real account
+### Testing against a real account
 
-`.env` holds live credentials for a real personal account. Reads are free. If you
-must write, prefix titles with `ZZ` and delete afterwards — and check the
-response status, because a failed delete returns 200-shaped output in some ad-hoc
-scripts and will leave litter behind.
+There is no Marvin sandbox, so any manual verification runs against somebody's
+live task list. Reads are free. If you must write:
 
-Never modify a pre-existing document.
+- Prefix titles with `ZZ` so the litter is obvious, and delete afterwards.
+- Check the delete response status. A failed delete returns 200-shaped output in
+  some ad-hoc scripts and will leave the task behind.
+- Never modify a pre-existing document.
+
+Do not commit credentials, not even into an example string in a comment. That
+has happened here once already.
 
 ## Deliberately not supported
 
@@ -171,16 +175,17 @@ subtasks, dependencies, snoozing, time blocks and daily sections. The model
 exposes nine task fields out of roughly seventy. Adding one back is easy;
 carrying all seventy was the problem with the previous version.
 
-What the database actually shows, which is more nuanced than "unused":
+The narrow surface is the feature. Nine predictable fields is what makes the
+tool safe to hand to an agent with write access; seventy fields with subtle
+interdependencies is not. If you need the rest of Marvin, use Marvin.
 
-- **Habits and time blocks were tried and abandoned.** 6 habit documents with
-  real history, last recorded mid-to-late 2025; 158 planner items, all from
-  Jan-Feb 2025. Not built because they were dropped, not because they were never
-  reached for.
-- **Rewards, kudos and recurring tasks are genuinely unused.** Zero
-  `RecurringTasks` documents and no reward or kudos state in `ProfileItems`.
-- **Task completion ran until 2026-04-13** and then stopped. 300 completed tasks
-  exist; the public API cannot see any of them.
+Two things to know before adding one back:
+
+- **Completed tasks are invisible to the public API.** `/children` does not
+  return them, so anything built on completion history needs the sync database.
+- **Habits, time blocks and recurring tasks each have their own document type**
+  with their own lifecycle rules. They are not extra fields on a task, and
+  treating them as such is how the previous version got unmaintainable.
 
 ## Why writes still go through the public API
 
