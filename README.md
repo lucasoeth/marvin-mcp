@@ -58,26 +58,58 @@ first — download the LTS version, install it, then run the command again.
 
 ### 2. Get your Amazing Marvin tokens
 
-Open [**Settings → API**](https://app.amazingmarvin.com/pre?api) in Amazing
-Marvin. You'll see two buttons that generate codes. You need both:
+Everything you need is on one page: [**Settings → API**](https://app.amazingmarvin.com/pre?api).
+
+At the top, two buttons generate tokens:
 
 - **API Token**
 - **Full Access Token**
 
-Copy them somewhere for a moment. They're passwords for your account — don't
-paste them into a public chat or a GitHub issue.
+Further down the same page, under the sync database section, four more values:
+
+- **Sync server**, **database**, **user**, **password**
+
+These are passwords for your account — don't paste them into a public chat or a
+GitHub issue.
 
 ### 3. Save them
 
 ```bash
-marvin auth --api-token PASTE_FIRST_ONE --full-access-token PASTE_SECOND_ONE
+marvin auth \
+  --api-token PASTE_API_TOKEN \
+  --full-access-token PASTE_FULL_ACCESS_TOKEN \
+  --sync-server PASTE_SERVER \
+  --sync-database PASTE_DATABASE \
+  --sync-user PASTE_USER \
+  --sync-password PASTE_PASSWORD
 ```
 
-It checks both tokens with Marvin before saving them, so if a paste went wrong
-you'll find out immediately rather than three commands later. The tokens end in
-`=`, which is the character people most often miss when selecting by hand.
+It checks the tokens with Marvin before saving anything, so if a paste went
+wrong you'll find out immediately rather than three commands later. The tokens
+end in `=`, which is the character people most often miss when selecting by
+hand.
 
 That's it. Run `marvin` and you should see today.
+
+<details>
+<summary>Why six values and not two?</summary>
+
+Marvin's public API has no search endpoint and can't return completed tasks at
+all, so without the sync database, search meant walking your entire project tree
+— about 22 requests per search against an allowance of 1440 a day, and it still
+couldn't see anything you'd finished.
+
+Marvin enforces that allowance by restricting accounts rather than by returning
+an error, so the failure mode was *your* account getting flagged. That's not
+something to ship to somebody else as a default. With the sync credentials,
+search is a single query, it's roughly 20× faster, and it sees your completed
+history.
+
+Reads use the sync database. Every write still goes through the official API,
+because that's what handles conflict resolution when you're also editing on your
+phone.
+
+</details>
 
 Your tokens are saved to `~/.marvin/config.json`, readable only by you. You
 won't need to enter them again, and `marvin` will work from any folder.
@@ -95,14 +127,6 @@ marvin find "invoice"                     # search everything
 marvin hierarchy                          # your projects and categories
 marvin undo                               # take back the last change
 ```
-
-> **One thing to know about `marvin find`.** Marvin's API has no search endpoint,
-> so search has to walk your whole project tree — about 22 requests per search,
-> against an allowance of 1440 a day. Occasional searching is completely fine.
-> Searching in a loop is not, and Marvin enforces its limit by restricting
-> accounts rather than by returning an error, so you'd find out the slow way.
-> If you search a lot, add the [sync credentials](#faster-search-optional) and
-> it drops to one request.
 
 `marvin complete` accepts part of a title, so you don't have to look anything up.
 If the fragment matches more than one task it stops and shows you the options
@@ -205,38 +229,13 @@ somewhere.
 
 ---
 
-<a id="faster-search-optional"></a>
-
-## Faster search (optional)
-
-Amazing Marvin's public API has no search endpoint, so by default `marvin find`
-has to walk your whole project tree — around 22 requests, a few seconds, and it
-can't see completed tasks at all.
-
-If you add your sync credentials — further down that same
-[Settings → API](https://app.amazingmarvin.com/pre?api) page — search becomes a
-single query: roughly half a second, and it can see your completed history too.
-
-```bash
-marvin auth \
-  --sync-server https://... \
-  --sync-database YOUR_DB \
-  --sync-user YOUR_USER \
-  --sync-password YOUR_PASSWORD
-```
-
-This is read-only. Every write still goes through the official API, because that's
-what handles conflict resolution when you're also editing on your phone.
-
----
-
 ## Your data
 
 Worth being explicit, since this asks for tokens to your task list:
 
 - It runs entirely on your own machine. There is no server of mine involved.
-- It talks to exactly two places: Amazing Marvin's API, and — only if you set up
-  the optional sync credentials — Amazing Marvin's sync database. Nothing else.
+- It talks to exactly two places, both Amazing Marvin's: their API for writes,
+  and their sync database for reads. Nothing else, ever.
 - Your tokens are stored in `~/.marvin/config.json` with permissions that make
   the file readable only by your user account. They're never transmitted
   anywhere except to Amazing Marvin.

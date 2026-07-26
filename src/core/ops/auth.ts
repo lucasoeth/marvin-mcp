@@ -129,12 +129,14 @@ export const auth = defineOp({
     if (missing.length) {
       lines.push("", `required and still missing: ${missing.join(", ")}`);
     }
-    if (!configured.includes("MARVIN_SYNC_SERVER")) {
-      lines.push(
-        "",
-        "no sync credentials: search will crawl the API instead of querying",
-        "the database, which is slower and cannot see completed tasks"
-      );
+    const missingSync = [
+      "MARVIN_SYNC_SERVER",
+      "MARVIN_SYNC_DATABASE",
+      "MARVIN_SYNC_USER",
+      "MARVIN_SYNC_PASSWORD",
+    ].filter((key) => !configured.includes(key as never));
+    if (missingSync.length) {
+      lines.push("", `sync credentials still missing: ${missingSync.join(", ")}`);
     }
     if (overriddenByEnv.length) {
       lines.push(

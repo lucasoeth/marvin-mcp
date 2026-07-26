@@ -15,7 +15,6 @@ import {
   type TaskPatch,
   UNASSIGNED,
   isTaskDoc,
-  isProjectDoc,
   toContainer,
   toLabel,
   toMarvinPatch,
@@ -27,57 +26,35 @@ type Raw = Record<string, unknown>;
 export class Repo {
   constructor(
     private readonly client: MarvinClient,
-    /** Optional read-only fast path. Absent is a supported configuration. */
-    private readonly sync: SyncDb | null = null
+    /**
+     * Required. Reads go to the sync database, writes to the public API.
+     *
+     * This used to be optional, with a container crawl as the fallback. The
+     * crawl cost ~22 requests against an account budget of 1440/day that Marvin
+     * enforces by restricting accounts rather than returning 429s, and it could
+     * not see completed tasks at all, so search silently missed most of the
+     * account. Neither is acceptable to ship to somebody else. Requiring the
+     * credentials costs four more values at setup, once.
+     */
+    private readonly sync: SyncDb
   ) {}
 
-  /**
-   * Search titles and notes.
-   *
-   * With sync credentials this is one Mango query. Without them it is the
-   * container crawl, which is slow and can come back incomplete — hence the
-   * `unreadable` list.
-   */
-  async searchTasks(
-    query: string,
-    includeDone: boolean
-  ): Promise<{ tasks: Task[]; unreadable: string[] }> {
-    if (this.sync) {
-      const pattern = `(?i).*${regexEscape(query)}.*`;
-      const selector: Record<string, unknown> = {
-        db: "Tasks",
-        $or: [{ title: { $regex: pattern } }, { note: { $regex: pattern } }],
-      };
-      if (!includeDone) selector.done = { $ne: true };
-      const docs = await this.sync.find<Raw>({ selector });
-      return { tasks: docs.map(toTask), unreadable: [] };
-    }
-
-    const { tasks, unreadable } = await this.allTasks();
-    const needle = query.toLowerCase();
-    return {
-      tasks: tasks
-        .filter((t) => includeDone || !t.done)
-        .filter(
-          (t) =>
-            t.title.toLowerCase().includes(needle) ||
-            (t.note?.toLowerCase().includes(needle) ?? false)
-        ),
-      unreadable,
+  /** Search titles and notes. One Mango query. */
+  async searchTasks(query: string, includeDone: boolean): Promise<Task[]> {
+    const pattern = `(?i).*${regexEscape(query)}.*`;
+    const selector: Record<string, unknown> = {
+      db: "Tasks",
+      $or: [{ title: { $regex: pattern } }, { note: { $regex: pattern } }],
     };
+    if (!includeDone) selector.done = { $ne: true };
+    const docs = await this.sync.find<Raw>({ selector });
+    return docs.map(toTask);
   }
 
-  /** Every task, for resolution fallbacks. One query when sync is available. */
-  async everyTask(): Promise<{ tasks: Task[]; unreadable: string[] }> {
-    if (this.sync) {
-      const docs = await this.sync.find<Raw>({ selector: { db: "Tasks" } });
-      return { tasks: docs.map(toTask), unreadable: [] };
-    }
-    return this.allTasks();
-  }
-
-  get hasFastPath(): boolean {
-    return this.sync !== null;
+  /** Every task, including completed ones. */
+  async everyTask(): Promise<Task[]> {
+    const docs = await this.sync.find<Raw>({ selector: { db: "Tasks" } });
+    return docs.map(toTask);
   }
 
   // -------------------------------------------------------------- reads
@@ -119,70 +96,6 @@ export class Repo {
 
   async children(parentId: string): Promise<Raw[]> {
     return asArray(await this.client.get<Raw[]>("/children", { parentId }));
-  }
-
-  /**
-   * Every task reachable from the container tree, plus today, due and the inbox.
-   *
-   * Marvin documents no search endpoint and no bulk export, so a crawl is the
-   * only option. Three things this has to get right:
-   *
-   * 1. The API is documented at 1 request per 3 seconds. Firing all 20-odd
-   *    container reads at once made them fail intermittently, and because the
-   *    failures were swallowed the crawl silently returned partial results:
-   *    consecutive runs on the same account returned 16, 38, 46 and 53 tasks.
-   *    Concurrency is capped and failures are retried.
-   * 2. A read that still fails after retries is reported, never hidden. A search
-   *    that quietly misses half the account is worse than a slow one.
-   * 3. A parentId cycle would otherwise recurse forever.
-   */
-  async allTasks(): Promise<{ tasks: Task[]; unreadable: string[] }> {
-    const seenContainers = new Set<string>();
-    const byId = new Map<string, Task>();
-    const unreadable: string[] = [];
-
-    const collect = (docs: Raw[]) => {
-      for (const doc of docs) {
-        if (!isTaskDoc(doc)) continue;
-        const task = toTask(doc);
-        if (task.id) byId.set(task.id, task);
-      }
-    };
-
-    const readChildren = async (parentId: string): Promise<Raw[] | null> => {
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          return await this.children(parentId);
-        } catch {
-          if (attempt < 2) await sleep(250 * 2 ** attempt);
-        }
-      }
-      unreadable.push(parentId);
-      return null;
-    };
-
-    const walk = async (parentId: string): Promise<void> => {
-      if (seenContainers.has(parentId)) return;
-      seenContainers.add(parentId);
-      const docs = await readChildren(parentId);
-      if (!docs) return;
-      collect(docs);
-      const nested = docs.filter(isProjectDoc).map((doc) => String(doc._id));
-      await mapLimited(nested, CRAWL_CONCURRENCY, walk);
-    };
-
-    const [todayTasks, dueTasks, containers] = await Promise.all([
-      this.today(),
-      this.due(),
-      this.containers(),
-    ]);
-
-    for (const task of [...todayTasks, ...dueTasks]) byId.set(task.id, task);
-
-    const roots = ["unassigned", ...containers.map((c) => c.id)];
-    await mapLimited(roots, CRAWL_CONCURRENCY, walk);
-
-    return { tasks: [...byId.values()], unreadable };
   }
 
   // -------------------------------------------------------------- writes
@@ -281,31 +194,4 @@ export class Repo {
 
 function asArray<T>(value: T[] | unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
-}
-
-/**
- * Marvin documents 1 request per 3 seconds and 1440 per day, but enforces
- * neither with a 429 — there is no backpressure to react to, so we self-limit.
- * Strict pacing would make a full crawl take over a minute, which is unusable
- * interactively; a small window keeps requests reliable without that cost.
- */
-const CRAWL_CONCURRENCY = 3;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Like Promise.all over a mapper, but with at most `limit` in flight. */
-async function mapLimited<T>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<void>
-): Promise<void> {
-  let cursor = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (cursor < items.length) {
-      await fn(items[cursor++]);
-    }
-  });
-  await Promise.all(workers);
 }

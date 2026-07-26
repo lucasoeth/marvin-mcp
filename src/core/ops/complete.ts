@@ -59,24 +59,14 @@ export async function resolveTask(
   if (found.length === 1) return found[0];
   if (found.length > 1) throw ambiguous(needle, found);
 
-  // Widen the search. One query with sync credentials, a crawl without.
-  const { tasks: all, unreadable } = await ctx.repo.everyTask();
+  // Widen to the whole account. One query against the sync database.
+  const all = await ctx.repo.everyTask();
   const byId = all.find((t) => t.id === needle);
   if (byId) return byId;
 
   found = matchByTitle(all, needle);
   if (found.length === 1) return found[0];
   if (found.length > 1) throw ambiguous(needle, found);
-
-  // A partial crawl must not be reported as "no such task" — completing the
-  // wrong thing, or nothing, on the strength of a truncated search is worse
-  // than refusing.
-  if (unreadable.length > 0) {
-    throw new Error(
-      `No task matching "${needle}", but ${unreadable.length} container(s) ` +
-        `could not be read, so the search was incomplete. Retry, or pass an id.`
-    );
-  }
 
   // Last resort: it may be a real id that no listing returned.
   try {

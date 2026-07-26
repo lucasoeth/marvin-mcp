@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Repo } from "./repo.js";
 import type { MarvinClient } from "./client.js";
+import type { SyncDb } from "./sync.js";
+
+/** Reads go to the sync database; none of these tests read. */
+const noSync = { async find() { return []; } } as unknown as SyncDb;
 
 /**
  * Stub standing in for Marvin, recording what it was asked to do.
@@ -34,7 +38,7 @@ describe("createTask and Marvin's inline # handling", () => {
       parentId: "#412",
     });
 
-    const task = await new Repo(client).createTask("Review PR #412");
+    const task = await new Repo(client, noSync).createTask("Review PR #412");
 
     expect(task.title).toBe("Review PR #412");
     expect(task.parentId).toBeNull();
@@ -55,7 +59,7 @@ describe("createTask and Marvin's inline # handling", () => {
       parentId: "#1042",
     });
 
-    const task = await new Repo(client).createTask("Pay invoice #1042", {
+    const task = await new Repo(client, noSync).createTask("Pay invoice #1042", {
       parentId: "real-container-id",
     });
 
@@ -72,7 +76,7 @@ describe("createTask and Marvin's inline # handling", () => {
       parentId: "1cf00c06-real-id",
     });
 
-    const task = await new Repo(client).createTask("Book a checkup", {
+    const task = await new Repo(client, noSync).createTask("Book a checkup", {
       parentId: "1cf00c06-real-id",
     });
 
@@ -88,7 +92,7 @@ describe("createTask and Marvin's inline # handling", () => {
       parentId: "unassigned",
     });
 
-    const task = await new Repo(client).createTask("Buy milk");
+    const task = await new Repo(client, noSync).createTask("Buy milk");
 
     expect(task.title).toBe("Buy milk");
     expect(task.parentId).toBeNull();

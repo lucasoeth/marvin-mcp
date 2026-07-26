@@ -149,17 +149,22 @@ away.
   documented but *not server-enforced* — there is no `429` and no rate-limit
   header, so there is no backpressure to react to. Enforcement is account
   restriction after human review, which makes it more dangerous to ignore, not
-  less. Budget accordingly: `brief` costs 3 requests, `find` costs 22 on this
-  account and fires them concurrently.
-- **The public API has no search endpoint and no bulk export**, so without sync
-  credentials `find` crawls the container tree. Two consequences worth knowing:
-  the crawl is expensive against the rate limit, and `/children` does not return
-  completed tasks, so the crawl cannot see completion history at all (measured:
-  53 tasks visible via crawl, 354 via the database).
-- **`MARVIN_SYNC_*` enables a read-only fast path.** Marvin's sync database is a
-  real CouchDB, so `find` becomes one Mango query instead of ~22 requests, and it
-  sees everything including completed work. `Repo` picks this automatically when
-  the credentials are present and falls back to the crawl when they are not.
+  less. `brief` costs 3 requests.
+- **The public API has no search endpoint and no bulk export**, and `/children`
+  does not return completed tasks. There is no way to search or to see
+  completion history through it at all (measured: 53 tasks reachable by crawling
+  the tree, 354 in the database).
+- **`MARVIN_SYNC_*` is required, not optional.** Reads go to Marvin's sync
+  database, which is a real CouchDB, so `find` is one Mango query and sees
+  everything including completed work.
+
+  This used to be optional, with a tree crawl as the fallback. The crawl cost
+  ~22 requests per search against the daily budget above, and could not see
+  completed tasks, so search silently missed most of the account. Shipping that
+  as the default meant a user who searched in a loop would get *their own* paid
+  account restricted. Four more values at setup, once, is the better trade. Do
+  not reintroduce the fallback.
+
   Reads only — writes stay on the public API, which owns conflict resolution and
   the reward/kudos side effects that writing directly would bypass.
 - **Writes must carry `fieldUpdates.<field>` timestamps.** Marvin resolves

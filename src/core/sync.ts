@@ -28,7 +28,7 @@ export interface SyncConfig {
   password: string;
 }
 
-/** Returns null when sync credentials are absent, which is a supported state. */
+/** Returns null when any sync credential is missing. Callers treat that as fatal. */
 export function syncConfigFrom(env: NodeJS.ProcessEnv): SyncConfig | null {
   const server = env.MARVIN_SYNC_SERVER;
   const database = env.MARVIN_SYNC_DATABASE;
@@ -36,6 +36,16 @@ export function syncConfigFrom(env: NodeJS.ProcessEnv): SyncConfig | null {
   const password = env.MARVIN_SYNC_PASSWORD;
   if (!server || !database || !user || !password) return null;
   return { server: server.replace(/\/$/, ""), database, user, password };
+}
+
+/** Which sync credentials are missing, for error messages. */
+export function missingSyncKeys(env: NodeJS.ProcessEnv): string[] {
+  return [
+    "MARVIN_SYNC_SERVER",
+    "MARVIN_SYNC_DATABASE",
+    "MARVIN_SYNC_USER",
+    "MARVIN_SYNC_PASSWORD",
+  ].filter((key) => !env[key]);
 }
 
 export interface MangoQuery {

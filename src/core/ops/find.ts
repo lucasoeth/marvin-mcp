@@ -24,30 +24,20 @@ export const find = defineOp({
   name: "find",
   summary: "Search tasks by keyword across the whole workspace",
   details:
-    "Crawls every container and filters client-side, because the Marvin API " +
-    "exposes no search endpoint. Slower than the other reads.",
+    "One query against the sync database, so it sees completed tasks too, " +
+    "which the public API cannot return at all.",
   input,
   mutates: false,
   positional: "query",
   async run({ query, includeDone, limit }, ctx) {
-    const { tasks, unreadable } = await ctx.repo.searchTasks(query, includeDone);
-    return {
-      query,
-      total: tasks.length,
-      tasks: tasks.slice(0, limit),
-      unreadable,
-    };
+    const tasks = await ctx.repo.searchTasks(query, includeDone);
+    return { query, total: tasks.length, tasks: tasks.slice(0, limit) };
   },
-  render({ query, total, tasks, unreadable }) {
-    // Never report "not found" as though the search were complete.
-    const caveat = unreadable.length
-      ? `\n  warning: ${unreadable.length} container(s) could not be read, ` +
-        `so this result may be incomplete`
-      : "";
-    if (total === 0) return `no tasks matching "${query}"${caveat}`;
+  render({ query, total, tasks }) {
+    if (total === 0) return `no tasks matching "${query}"`;
     const shown = tasks.map((t: Task) => "  " + formatTask(t)).join("\n");
     const truncated =
       total > tasks.length ? `\n  ...${total - tasks.length} more` : "";
-    return `${total} matching "${query}"\n${shown}${truncated}${caveat}`;
+    return `${total} matching "${query}"\n${shown}${truncated}`;
   },
 });

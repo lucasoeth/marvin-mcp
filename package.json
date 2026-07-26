@@ -1,6 +1,6 @@
 {
   "name": "marvin-mcp",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "Amazing Marvin as a CLI and an MCP server",
   "mcpName": "io.github.lucasoeth/marvin",
   "type": "module",
