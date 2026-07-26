@@ -11,7 +11,12 @@
  */
 
 import { z } from "zod";
-import { isValidDate, toMarvinPatch, type TaskPatch } from "../model.js";
+import {
+  isValidDate,
+  toMarvinPatch,
+  type Task,
+  type TaskPatch,
+} from "../model.js";
 import { resolveInlineParent } from "./capture.js";
 import { defineOp } from "./types.js";
 
@@ -74,7 +79,22 @@ export const apply = defineOp({
   mutates: true,
   async run({ changes, dryRun }, ctx) {
     if (dryRun) {
-      return { applied: 0, dryRun: true, results: changes.map(describe) };
+      // Resolve first. A preview that only reformats the arguments you just
+      // typed tells you nothing you did not already know, and this is the only
+      // check a CLI write gets — there is no undo, and no client sitting in
+      // front of it asking for approval. So: name the tasks, show what each
+      // field is changing *from*, and refuse to pretend an id exists.
+      //
+      // One sync query for the whole set, so the preview is free against the
+      // API budget and costs less than the write it is previewing.
+      const known = await ctx.repo.tasksById(
+        changes.flatMap((item) => ("id" in item ? [item.id] : []))
+      );
+      return {
+        applied: 0,
+        dryRun: true,
+        results: changes.map((item) => preview(item, known)),
+      };
     }
 
     const results: string[] = [];
@@ -149,4 +169,60 @@ function describe(item: ChangeInput): string {
     case "delete":
       return `delete ${item.id}`;
   }
+}
+
+/**
+ * One line of a dry run, against the task as it stands today.
+ *
+ * Unknown ids are reported rather than echoed. An id that does not resolve is
+ * the single most likely thing to be wrong in a hand-written or model-written
+ * change set, and it is the whole reason to look before writing.
+ */
+function preview(item: ChangeInput, known: Map<string, Task>): string {
+  if (item.action === "create") {
+    const set = item.set ?? {};
+    const extra = Object.entries(set)
+      .map(([key, value]) => `${key}=${show(value)}`)
+      .join(", ");
+    return `create   "${item.title}"${extra ? `  (${extra})` : ""}`;
+  }
+
+  const task = known.get(item.id);
+  if (!task) return `ERROR    ${item.id}: no such task`;
+
+  switch (item.action) {
+    case "complete":
+      return `complete "${task.title}"${task.done ? "  (already done)" : ""}`;
+
+    case "delete":
+      // Deletion is the one thing nothing can walk back, so say what is being
+      // lost rather than only which id.
+      return `delete   "${task.title}"${context(task)}  — permanent`;
+
+    case "update": {
+      const diffs = Object.entries(item.set)
+        .filter(([key]) => key in task)
+        .map(([key, next]) => {
+          const before = (task as unknown as Record<string, unknown>)[key];
+          return show(before) === show(next)
+            ? `${key}: ${show(next)} (unchanged)`
+            : `${key}: ${show(before)} → ${show(next)}`;
+        });
+      return `update   "${task.title}"  ${diffs.join(", ") || "nothing"}`;
+    }
+  }
+}
+
+/** Whatever else is worth knowing before destroying it. */
+function context(task: Task): string {
+  const parts: string[] = [];
+  if (task.scheduledFor) parts.push(`for ${task.scheduledFor}`);
+  if (task.dueBy) parts.push(`due ${task.dueBy}`);
+  if (task.note) parts.push("has a note");
+  return parts.length ? `  (${parts.join(", ")})` : "";
+}
+
+function show(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "none";
+  return String(value);
 }

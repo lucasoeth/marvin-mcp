@@ -53,11 +53,17 @@ deleting.
 
 What stands in for a safety net: MCP clients see every writing tool annotated
 `destructiveHint`, so they ask the user before the call runs, and on the CLI
-`apply --dry-run` renders the whole change set without writing any of it.
+`apply --dry-run` resolves the change set against the account and prints it —
+task titles, each field's current value next to the proposed one, what a delete
+would destroy, and an explicit error for any id that does not exist. One sync
+query for the whole set, so the preview is free and costs less than the write.
+
+That resolution is the point. A dry run that reformats the arguments you just
+typed confirms nothing; this one is the only check a CLI write gets.
 
 Prefer `apply` over a sequence of individual writes. It is one ordered set the
 user can review in one go, and one round trip rather than twelve against a
-rate-limited account. Use `--dry-run` first when the change set is large.
+rate-limited account. Use `--dry-run` first for anything you did not hand-verify.
 
 ## Working on the code
 

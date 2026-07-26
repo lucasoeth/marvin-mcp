@@ -109,6 +109,22 @@ export class Repo {
     return { tasks: docs.map(toTask), warning };
   }
 
+  /**
+   * Several tasks by id, in one query.
+   *
+   * Goes to the sync database rather than looping `/doc`, so resolving a
+   * twelve-item change set costs nothing against the 1440/day API budget
+   * instead of twelve of it. Ids that do not exist are simply absent from the
+   * result, which is how callers detect them.
+   */
+  async tasksById(ids: string[]): Promise<Map<string, Task>> {
+    if (ids.length === 0) return new Map();
+    const docs = await this.sync.find<Raw>({
+      selector: { db: "Tasks", _id: { $in: ids } },
+    });
+    return new Map(docs.map(toTask).map((task) => [task.id, task]));
+  }
+
   /** Every task, including completed ones. */
   async everyTask(): Promise<Task[]> {
     const docs = await this.sync.find<Raw>({ selector: { db: "Tasks" } });

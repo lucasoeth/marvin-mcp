@@ -178,7 +178,16 @@ Before committing a big batch, preview it:
 marvin apply --changes '[...]' --dry-run
 ```
 
-That prints every change it would make and writes nothing.
+That resolves every id and prints what would actually happen — the task's real
+title, the current value beside the new one, and an error for any id that
+doesn't exist. It writes nothing.
+
+```
+would apply 3 change(s)
+  update   "Buy shoes"  scheduledFor: 2026-01-02 → 2026-07-27
+  delete   "call the plumber"  (for 2026-04-12, has a note)  — permanent
+  ERROR    8c1e4f2a: no such task
+```
 
 Add `--json` to any command if you want to pipe the output into something else.
 
