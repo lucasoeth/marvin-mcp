@@ -7,7 +7,7 @@
  */
 
 import { z } from "zod";
-import type { Task } from "../model.js";
+import { MARK_DONE_FIELDS, snapshotFields, type Task } from "../model.js";
 import { defineOp, type Ctx } from "./types.js";
 import { formatTask } from "./brief.js";
 
@@ -26,14 +26,21 @@ export const complete = defineOp({
   positional: "task",
   async run({ task: needle }, ctx) {
     const match = await resolveTask(needle, ctx);
-    await ctx.repo.markDone(match.id);
+
+    // Snapshot before the write, and snapshot all three fields `/markDone`
+    // touches. It stamps `doneAt` and moves `day` from `unassigned` to today as
+    // well as setting `done`, so journalling `done` alone made undo restore one
+    // field of three and leave the task dated to the day it was completed.
+    const before = await ctx.repo.getRaw(match.id);
     await ctx.journal.record("complete", [
       {
         id: match.id,
-        before: { done: false, title: match.title },
+        before: snapshotFields(before, MARK_DONE_FIELDS),
         after: { done: true },
       },
     ]);
+
+    await ctx.repo.markDone(match.id);
     return { ...match, done: true };
   },
   render(task) {
@@ -43,7 +50,8 @@ export const complete = defineOp({
 
 /**
  * Shared by ops that take "an id or something that looks like a title".
- * Searches the cheap lists first and only crawls the full tree if needed.
+ * Searches today's and the due list first, and only widens to the whole account
+ * if neither matched.
  */
 export async function resolveTask(
   needle: string,

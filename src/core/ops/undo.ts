@@ -11,10 +11,15 @@
  * Deletes cannot be undone. Marvin issues a new id on recreate, so restoring one
  * would silently break anything referencing the old id. Those are reported as
  * skipped rather than faked.
+ *
+ * A created item that has been edited since is left alone. "Capture it, then
+ * add the note and the estimate, then undo the capture" would otherwise destroy
+ * the note along with the task, and the note is the part that cannot be
+ * retyped from memory.
  */
 
 import { z } from "zod";
-import { defineOp } from "./types.js";
+import { defineOp, type Ctx } from "./types.js";
 
 const input = z.object({
   dryRun: z
@@ -43,12 +48,19 @@ export const undo = defineOp({
         continue;
       }
       if (change.before === null) {
-        // Created by the op being undone, so undoing means removing it.
-        if (!dryRun) await ctx.repo.deleteDoc(change.id);
+        // Created by the op being undone, so undoing means removing it — but
+        // only if it is still the thing that was created. `entry.ts` is stamped
+        // after every write in the set lands, so a later `updatedAt` means a
+        // human or another client touched the document in between, and deleting
+        // it would take their edit with it.
         const title = change.after.title;
-        details.push(
-          `deleted ${typeof title === "string" ? `"${title}"` : change.id}`
-        );
+        const label = typeof title === "string" ? `"${title}"` : change.id;
+        if (await editedSince(change.id, entry.ts, ctx)) {
+          skipped.push(`${label} was edited after it was created; left alone`);
+          continue;
+        }
+        if (!dryRun) await ctx.repo.deleteDoc(change.id);
+        details.push(`deleted ${label}`);
         continue;
       }
       if (!dryRun) await ctx.repo.updateRaw(change.id, change.before);
@@ -69,3 +81,24 @@ export const undo = defineOp({
     return lines.join("\n");
   },
 });
+
+/**
+ * Whether the document has a newer `updatedAt` than the change set that created
+ * it. `updateRaw` maintains `updatedAt` on every write, ours included.
+ *
+ * A document that can no longer be read is not treated as edited: it has most
+ * likely already been deleted by hand, and the delete below is then a no-op.
+ */
+async function editedSince(
+  id: string,
+  ts: number,
+  ctx: Pick<Ctx, "repo">
+): Promise<boolean> {
+  let updatedAt: unknown;
+  try {
+    updatedAt = (await ctx.repo.getRaw(id)).updatedAt;
+  } catch {
+    return false;
+  }
+  return typeof updatedAt === "number" && updatedAt > ts;
+}

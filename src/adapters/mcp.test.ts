@@ -1,7 +1,9 @@
+import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 import { ops } from "../core/ops/index.js";
 import {
   SERVER_INSTRUCTIONS,
+  VERSION,
   callOp,
   toolsFromRegistry,
   toolNameFor,
@@ -92,9 +94,40 @@ describe("server instructions", () => {
     expect(SERVER_INSTRUCTIONS).toContain("dueBy");
   });
 
-  it("stays small enough to carry in every message", () => {
-    // Billed per message. A rough character budget is enough to catch someone
-    // pasting an essay in here later.
-    expect(SERVER_INSTRUCTIONS.length).toBeLessThan(3000);
+  it("opens by naming when to reach for these tools", () => {
+    // Under tool search the instructions are the only thing loaded at session
+    // start, so the first sentence is what decides whether the model ever looks
+    // for marvin_* at all. A bare product name does not do that.
+    const opening = SERVER_INSTRUCTIONS.slice(0, 300);
+    expect(opening).toMatch(/todo|task/i);
+    expect(opening).toContain("marvin_brief");
+  });
+
+  it("stays under Claude Code's silent 2KB truncation cap", () => {
+    // Billed per message, and truncated without warning above ~2048 bytes. The
+    // nine-fields paragraph is at the bottom and is what falls off the cliff.
+    const bytes = Buffer.byteLength(SERVER_INSTRUCTIONS, "utf8");
+    expect(bytes).toBeLessThan(1900);
+  });
+});
+
+describe("the date warning reaches clients that ignore instructions", () => {
+  // Claude Desktop receives the instructions field and never reads it
+  // (claude-code#23808, #43749). It is also the .mcpb audience. So the two ops
+  // that can move a real deadline restate the distinction in their own
+  // descriptions, where every client sees it.
+  it.each(["marvin_capture", "marvin_apply"])("%s says which field is which", (name) => {
+    const description = byName.get(name)?.description ?? "";
+    expect(description).toContain("scheduledFor");
+    expect(description).toContain("dueBy");
+  });
+});
+
+describe("server identity", () => {
+  it("reports the real package version, not a hardcoded one", () => {
+    const pkg = JSON.parse(
+      readFileSync(new URL("../../package.json", import.meta.url), "utf8")
+    ) as { version: string };
+    expect(VERSION).toBe(pkg.version);
   });
 });

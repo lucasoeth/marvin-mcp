@@ -1,10 +1,11 @@
 /**
  * Direct CouchDB (Cloudant) read access.
  *
- * Marvin's public API has no search endpoint and no bulk export, so finding a
- * task means crawling the container tree: ~22 requests against an API
- * documented at 1 per 3 seconds, which in practice returned partial results
- * nondeterministically.
+ * Marvin's public API has no search endpoint and no bulk export, and
+ * `/children` never returns completed tasks. Finding a task through it meant
+ * crawling the container tree: ~22 requests against an API documented at 1 per
+ * 3 seconds, which in practice returned partial results nondeterministically
+ * and could not see completed work at all.
  *
  * The sync database Marvin exposes is a real CouchDB, so a Mango query does the
  * same job in one request. Measured on a 785-document account: all open tasks in
@@ -14,8 +15,8 @@
  * resolution and reward/kudos side effects that writing to the database directly
  * would bypass.
  *
- * Credentials come from Settings > API and are optional; without them the client
- * falls back to the crawl.
+ * Credentials come from Settings > API and are required. The crawl was the
+ * fallback and has been removed; see the Repo constructor for why.
  * https://github.com/amazingmarvin/MarvinAPI/wiki/Database-Access
  */
 

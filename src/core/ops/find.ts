@@ -1,12 +1,10 @@
 /**
- * Search escape hatch.
+ * Search.
  *
- * Marvin's public API documents no search endpoint, so without sync credentials
- * this crawls the container tree and filters locally — slow, and reported as
- * possibly incomplete when containers fail to read.
- *
- * With MARVIN_SYNC_* set it is a single Mango query against the CouchDB sync
- * database instead: complete, deterministic, and roughly 500ms.
+ * Marvin's public API documents no search endpoint and `/children` never returns
+ * completed tasks, so this goes to the sync database instead: one Mango query,
+ * complete, deterministic, and free against the API's daily budget. That is why
+ * MARVIN_SYNC_* is required rather than optional — see AGENTS.md.
  */
 
 import { z } from "zod";

@@ -108,7 +108,7 @@ export class Repo {
    * not: Marvin strips the token from the title and stores the literal string
    * as `parentId`, even when no such container exists. "Review PR #412" becomes
    * "Review PR" filed under `parentId: "#412"`, which is not a real container,
-   * so the task appears in neither the tree crawl nor the inbox.
+   * so the task appears in neither that category nor the inbox.
    *
    * Callers resolve `#Category` to a real id first where they can, but that
    * only helps when the category exists. `#412`, `#1`, `#hashtag` cannot

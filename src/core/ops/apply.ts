@@ -11,7 +11,13 @@
  */
 
 import { z } from "zod";
-import { isValidDate, toMarvinPatch, type TaskPatch } from "../model.js";
+import {
+  MARK_DONE_FIELDS,
+  isValidDate,
+  snapshotFields,
+  toMarvinPatch,
+  type TaskPatch,
+} from "../model.js";
 import type { Change } from "../journal.js";
 import { resolveInlineParent } from "./capture.js";
 import { defineOp } from "./types.js";
@@ -67,7 +73,10 @@ export const apply = defineOp({
   summary: "Apply a batch of task changes atomically, with undo support",
   details:
     "Actions: update, complete, create, delete. The whole set is journalled as " +
-    "one entry, so `marvin undo` reverts all of it. Use --dry-run to preview.",
+    "one entry, so `marvin undo` reverts all of it. Use --dry-run to preview. " +
+    // See capture.ts for why this line is repeated rather than left to
+    // SERVER_INSTRUCTIONS.
+    "scheduledFor is the day to work on it; dueBy is the deadline.",
   input,
   mutates: true,
   async run({ changes, dryRun }, ctx) {
@@ -78,72 +87,84 @@ export const apply = defineOp({
     const journalled: Change[] = [];
     const results: string[] = [];
 
-    for (const item of changes) {
-      switch (item.action) {
-        case "update": {
-          const before = await ctx.repo.getRaw(item.id);
-          const fields = toMarvinPatch(item.set as TaskPatch);
-          journalled.push({
-            id: item.id,
-            before: pick(before, Object.keys(fields)),
-            after: fields,
-          });
-          await ctx.repo.updateRaw(item.id, fields);
-          results.push(describe(item));
-          break;
-        }
-        case "complete": {
-          const before = await ctx.repo.getRaw(item.id);
-          journalled.push({
-            id: item.id,
-            before: pick(before, ["done"]),
-            after: { done: true },
-          });
-          await ctx.repo.markDone(item.id);
-          results.push(describe(item));
-          break;
-        }
-        case "create": {
-          // Same inline-#Category resolution capture does, and for the same
-          // reason: Marvin strips a `#token` from the title server-side and
-          // stores the literal string as parentId, so "Review PR #412" becomes
-          // "Review PR" filed under a container named "#412" that does not
-          // exist. The task is then reachable by neither the tree crawl nor the
-          // inbox. Going through createTask directly skipped this, which made
-          // `apply` — the path agents are told to prefer — the one that
-          // silently loses tasks. An explicit parentId still wins.
-          const set = (item.set ?? {}) as TaskPatch;
-          let title = item.title;
-          let parentId = set.parentId ?? undefined;
-          if (!parentId) {
-            const resolved = await resolveInlineParent(item.title, ctx);
-            title = resolved.title;
-            parentId = resolved.parentId;
+    // Each change is journalled *before* its write, and the record happens in a
+    // finally, so a throw partway through still leaves an entry covering
+    // everything that landed. Recording only on success meant a failure at
+    // change six committed five unjournalled writes and left the next `undo`
+    // reverting an older, unrelated change set.
+    //
+    // The residue this leaves is harmless in the safe direction: an entry for a
+    // write that then failed restores a before-state onto a document that never
+    // moved.
+    try {
+      for (const item of changes) {
+        switch (item.action) {
+          case "update": {
+            const before = await ctx.repo.getRaw(item.id);
+            const fields = toMarvinPatch(item.set as TaskPatch);
+            journalled.push({
+              id: item.id,
+              before: snapshotFields(before, Object.keys(fields)),
+              after: fields,
+            });
+            await ctx.repo.updateRaw(item.id, fields);
+            results.push(describe(item));
+            break;
           }
+          case "complete": {
+            const before = await ctx.repo.getRaw(item.id);
+            journalled.push({
+              id: item.id,
+              before: snapshotFields(before, MARK_DONE_FIELDS),
+              after: { done: true },
+            });
+            await ctx.repo.markDone(item.id);
+            results.push(describe(item));
+            break;
+          }
+          case "create": {
+            // Same inline-#Category resolution capture does, and for the same
+            // reason: Marvin strips a `#token` from the title server-side and
+            // stores the literal string as parentId, so "Review PR #412" becomes
+            // "Review PR" filed under a container named "#412" that does not
+            // exist. The task is then in neither that category nor the inbox,
+            // so nothing lists it. Going through createTask directly skipped this, which made
+            // `apply` — the path agents are told to prefer — the one that
+            // silently loses tasks. An explicit parentId still wins.
+            const set = (item.set ?? {}) as TaskPatch;
+            let title = item.title;
+            let parentId = set.parentId ?? undefined;
+            if (!parentId) {
+              const resolved = await resolveInlineParent(item.title, ctx);
+              title = resolved.title;
+              parentId = resolved.parentId;
+            }
 
-          const created = await ctx.repo.createTask(title, {
-            ...set,
-            parentId,
-          });
-          journalled.push({
-            id: created.id,
-            before: null,
-            after: { title: created.title },
-          });
-          results.push(`created "${created.title}" [${created.id}]`);
-          break;
-        }
-        case "delete": {
-          const before = await ctx.repo.getRaw(item.id);
-          journalled.push({ id: item.id, before, after: null });
-          await ctx.repo.deleteDoc(item.id);
-          results.push(describe(item));
-          break;
+            const created = await ctx.repo.createTask(title, {
+              ...set,
+              parentId,
+            });
+            journalled.push({
+              id: created.id,
+              before: null,
+              after: { title: created.title },
+            });
+            results.push(`created "${created.title}" [${created.id}]`);
+            break;
+          }
+          case "delete": {
+            const before = await ctx.repo.getRaw(item.id);
+            journalled.push({ id: item.id, before, after: null });
+            await ctx.repo.deleteDoc(item.id);
+            results.push(describe(item));
+            break;
+          }
         }
       }
+    } finally {
+      await ctx.journal.record("apply", journalled);
     }
 
-    await ctx.journal.record("apply", journalled);
     return { applied: journalled.length, dryRun: false, results };
   },
   render({ applied, dryRun, results }) {
@@ -169,17 +190,4 @@ function describe(item: ChangeInput): string {
     case "delete":
       return `delete ${item.id}`;
   }
-}
-
-/**
- * Snapshot only the keys about to change. Storing the whole document would make
- * the journal enormous and would risk undo clobbering unrelated concurrent edits.
- */
-function pick(
-  source: Record<string, unknown>,
-  keys: string[]
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const key of keys) out[key] = source[key] ?? null;
-  return out;
 }

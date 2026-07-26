@@ -51,12 +51,22 @@ Write authority is full: no confirmation prompts. The safety net is that every
 mutating op journals the before-state to `~/.marvin/journal.jsonl`, and
 `marvin undo` reverts the last change set.
 
+Journal each change **before** its write, and record the set in a `finally`.
+Recording only on success meant a failure partway through a batch left the
+earlier writes committed and unjournalled, and the next `undo` reverted an
+older, unrelated change set. The residue this leaves is harmless in the safe
+direction: an entry for a write that then failed restores a before-state onto a
+document that never moved.
+
 Prefer `apply` over a sequence of individual writes. It commits one atomic change
 set, so `undo` reverts the whole plan rather than one twelfth of it. Use
 `--dry-run` first when the change set is large.
 
 `undo` deletes items that were created, and restores fields that were changed. It
-cannot restore a genuine deletion — Marvin reissues ids on recreate.
+cannot restore a genuine deletion — Marvin reissues ids on recreate. It also
+leaves a created item alone if its `updatedAt` is newer than the change set,
+because "capture it, then add the note, then undo the capture" would otherwise
+destroy the note, and the note is the part that cannot be retyped from memory.
 
 ## Working on the code
 
@@ -64,7 +74,17 @@ cannot restore a genuine deletion — Marvin reissues ids on recreate.
 npm run build      # tsc
 npm test           # vitest
 npm run typecheck
+npm run mcpb       # build/marvin-<version>.mcpb, the Claude Desktop installer
 ```
+
+`npm run mcpb` generates `manifest.json` from `package.json` and the op
+registry rather than checking one in, for the same reason the CLI and the MCP
+tools are generated: a hand-maintained copy of the version and the tool list is
+a copy that goes stale. It vendors `node_modules` into the archive, which is
+what makes the bundle work with nothing installed — Claude Desktop ships its own
+Node runtime. Test it by unpacking somewhere **outside this repo**; inside it,
+Node's upward module resolution finds the repo's own `node_modules` and a
+missing dependency looks fine.
 
 ### Architecture
 
@@ -171,6 +191,14 @@ away.
   multi-device conflicts per field by comparing them, and the public API does not
   maintain them for you. `updateRaw` handles this. Omitting it means an edit from
   the phone silently beats yours regardless of write order.
+- **`/markDone` mutates three fields, not one.** `done`, `doneAt`, and `day`
+  (from `unassigned` to today). A journal entry that records only `done`
+  restores one field of three and leaves the task dated to whenever it was
+  completed. `MARK_DONE_FIELDS` in `model.ts` is the list; use it.
+- **`day` and `parentId` use the `unassigned` string, so a journal snapshot of a
+  missing one cannot be `null`.** Writing `parentId: null` back files the task
+  under no container at all, which is not the inbox and is not somewhere it can
+  be found again. `snapshotFields()` handles this; do not hand-roll a `?? null`.
 - **The tree can contain cycles.** Any recursive walk needs a visited set.
 - **`/addCategory` is undocumented.** It is used by nothing right now; verify
   before relying on it.

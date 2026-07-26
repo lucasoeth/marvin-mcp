@@ -6,6 +6,7 @@
  * inputSchema, and its render() becomes the text content.
  */
 
+import { createRequire } from "module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   CallToolRequestSchema,
@@ -19,6 +20,18 @@ import type { Ctx, Op } from "../core/ops/types.js";
 import { schemaOf } from "./cli.js";
 
 export const TOOL_PREFIX = "marvin_";
+
+/**
+ * Read from package.json rather than repeated here, because a hardcoded version
+ * is the one that goes stale silently: the number a client shows and every bug
+ * report quotes would name a release that fixed the bug being reported.
+ *
+ * `../../package.json` resolves from both `src/adapters/` and `dist/adapters/`,
+ * and npm always includes package.json in the tarball.
+ */
+export const VERSION: string = createRequire(import.meta.url)(
+  "../../package.json"
+).version;
 
 export function toolNameFor(op: Op<any, any>): string {
   return TOOL_PREFIX + op.name;
@@ -119,7 +132,10 @@ function errorResult(text: string): CallToolResult {
  * The planning notes are here rather than in tool descriptions because they are
  * about restraint across a whole conversation, not about how to call one tool.
  */
-export const SERVER_INSTRUCTIONS = `Amazing Marvin task management.
+export const SERVER_INSTRUCTIONS = `Amazing Marvin task management. Use these
+tools for the user's own todos, projects and deadlines: what is on today, what
+to work on next, capturing a task, planning or rescheduling a day. Start with
+marvin_brief.
 
 TWO DATE FIELDS, easily confused and costly to get wrong:
 - scheduledFor: the day the user intends to work on it.
@@ -128,19 +144,18 @@ TWO DATE FIELDS, easily confused and costly to get wrong:
 dueBy when scheduledFor was meant moves a real deadline; the reverse silently
 reschedules work. If a request is genuinely ambiguous, ask rather than guess.
 
-BATCH WRITES with marvin_apply instead of several single calls. It commits as
-one change set, so marvin_undo reverts the whole plan rather than a twelfth of
-it. Preview large change sets with dryRun first.
+BATCH WRITES with marvin_apply rather than several single calls: it commits one
+change set, so marvin_undo reverts the whole plan and not a twelfth of it.
+Preview large sets with dryRun.
 
-UNDO: marvin_undo reverts the last change set. It cannot restore a genuine
+UNDO: marvin_undo reverts the last change set, but cannot restore a genuine
 deletion, because Marvin issues a new id on recreate. Prefer completing or
-rescheduling a task over deleting it.
+rescheduling over deleting.
 
-COST: reads are cheap. marvin_find is a single database query and does not
-count against Marvin's API budget, so search freely. Writes do count, against
-1440 requests/day that Marvin enforces by restricting the account rather than
-returning an error, so do not write in a loop. Use marvin_brief rather than
-marvin_find for "what's on today"; it answers directly.
+COST: marvin_find is one database query, free against Marvin's API budget, so
+search freely. Writes are not free: the cap is 1440/day and Marvin enforces it
+by restricting the account rather than returning an error, so never write in a
+loop.
 
 WHEN PLANNING:
 - Do not silently reschedule everything. If the day is overcommitted, say so and
@@ -157,7 +172,7 @@ them with ordinary tasks.`;
 
 export function createMcpServer(ctxFactory: () => Ctx): McpServer {
   const mcp = new McpServer(
-    { name: "marvin", version: "2.0.0" },
+    { name: "marvin", version: VERSION },
     { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS }
   );
 

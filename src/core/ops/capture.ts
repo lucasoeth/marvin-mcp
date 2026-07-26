@@ -57,7 +57,13 @@ export const capture = defineOp({
   summary: "Add a task. Supports +today, #Category and @label inline",
   details:
     "Inline syntax is expanded by Marvin itself, so no date parsing happens " +
-    "locally. Explicit flags win over anything inferred from the title.",
+    "locally. Explicit flags win over anything inferred from the title. " +
+    // Repeated from SERVER_INSTRUCTIONS on purpose. Claude Desktop receives the
+    // instructions field and never reads it (claude-code#23808, #43749:
+    // getInstructions() has zero call sites in the app bundle), and Desktop is
+    // the audience least able to notice a moved deadline. Twenty words is a
+    // cheap price for the two ops that can set the wrong one.
+    "scheduledFor is the day to work on it; dueBy is the deadline.",
   input,
   mutates: true,
   positional: "text",
