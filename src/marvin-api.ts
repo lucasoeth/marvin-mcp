@@ -7,6 +7,21 @@
 
 const API_BASE = "https://serv.amazingmarvin.com/api";
 
+/**
+ * Timezone offset in the sign convention Marvin expects.
+ *
+ * The API documents this as "Time offset in minutes. Added to time to fix time
+ * zone issues. So if the user is in Pacific time, this would be -8*60" — i.e.
+ * negative west of UTC. JavaScript's getTimezoneOffset() is the inverse: it
+ * returns minutes *west* of UTC, so Pacific yields +480, not -480. Sending the
+ * raw value doubles the error and can date items to the wrong day.
+ *
+ * https://github.com/amazingmarvin/MarvinAPI/wiki/Marvin-API
+ */
+function marvinTimeZoneOffset(): number {
+  return -new Date().getTimezoneOffset();
+}
+
 export interface MarvinTask {
   _id: string;
   title: string;
@@ -178,7 +193,7 @@ export class MarvinAPI {
   async createTask(options: CreateTaskOptions): Promise<MarvinTask> {
     const payload: Record<string, unknown> = {
       title: options.title,
-      timeZoneOffset: new Date().getTimezoneOffset(),
+      timeZoneOffset: marvinTimeZoneOffset(),
     };
 
     if (options.day) payload.day = options.day;
@@ -206,7 +221,7 @@ export class MarvinAPI {
       method: "POST",
       body: {
         itemId: taskId,
-        timeZoneOffset: new Date().getTimezoneOffset(),
+        timeZoneOffset: marvinTimeZoneOffset(),
       },
     });
   }
@@ -285,7 +300,7 @@ export class MarvinAPI {
   async createProject(options: CreateProjectOptions): Promise<MarvinProject> {
     const payload: Record<string, unknown> = {
       title: options.title,
-      timeZoneOffset: new Date().getTimezoneOffset(),
+      timeZoneOffset: marvinTimeZoneOffset(),
     };
 
     if (options.parentId) payload.parentId = options.parentId;
@@ -314,7 +329,7 @@ export class MarvinAPI {
   async createCategory(options: CreateCategoryOptions): Promise<MarvinCategory> {
     const payload: Record<string, unknown> = {
       title: options.title,
-      timeZoneOffset: new Date().getTimezoneOffset(),
+      timeZoneOffset: marvinTimeZoneOffset(),
     };
 
     if (options.parentId) payload.parentId = options.parentId;
