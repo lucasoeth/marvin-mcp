@@ -76,7 +76,7 @@ export class Repo {
     const and: Record<string, unknown>[] = [];
 
     const status = filter.status ?? "open";
-    if (status === "open") and.push({ done: { $ne: true } });
+    if (status === "open") and.push(notDone());
     if (status === "done") and.push({ done: true });
 
     if (filter.query) {
@@ -252,6 +252,20 @@ export class Repo {
 
 function asArray<T>(value: T[] | unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
+}
+
+/**
+ * "Not finished", including documents carrying no `done` field at all.
+ *
+ * CouchDB's `$ne` does not match a missing field. `{ done: { $ne: true } }` is
+ * the obvious spelling and is what this inherited from the old `find` op, and
+ * it silently drops every task Marvin never wrote the flag onto. Measured on a
+ * real account: 13 of 42 open tasks, invisible, with no symptom other than a
+ * count that looked plausible. 309 done + 29 "open" against 351 total was the
+ * only evidence, and nothing surfaced the arithmetic.
+ */
+function notDone(): Record<string, unknown> {
+  return { $or: [{ done: { $exists: false } }, { done: { $ne: true } }] };
 }
 
 /**

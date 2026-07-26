@@ -33,7 +33,26 @@ describe("queryTasks selectors", () => {
   it("scopes to tasks and hides completed ones by default", async () => {
     const selector = await selectorFor({});
     expect(selector.db).toBe("Tasks");
-    expect(clauses(selector)).toEqual([{ done: { $ne: true } }]);
+    expect(clauses(selector)).toHaveLength(1);
+  });
+
+  it("counts a task with no done field at all as open", async () => {
+    // CouchDB's $ne does not match a missing field, so `{done: {$ne: true}}` —
+    // the obvious spelling, inherited from the old `find` op — silently drops
+    // every task Marvin never wrote the flag onto. On the account this was
+    // found on that was 13 of 42 open tasks, and the only evidence was that
+    // 309 done + 29 open did not add up to 351 total.
+    const [status] = clauses(await selectorFor({}));
+    expect(status).toEqual({
+      $or: [{ done: { $exists: false } }, { done: { $ne: true } }],
+    });
+  });
+
+  it("does not need the escape hatch for status=done", async () => {
+    // `done: true` matches only documents that carry the flag, which is
+    // exactly right: a task with no `done` field has not been completed.
+    const [status] = clauses(await selectorFor({ status: "done" }));
+    expect(status).toEqual({ done: true });
   });
 
   it("drops the done filter entirely for status=any", async () => {
