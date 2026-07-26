@@ -12,6 +12,7 @@
  */
 
 import { z } from "zod";
+import { verifyToken } from "../client.js";
 import { CREDENTIAL_KEYS, configPath, readConfig, writeConfig } from "../config.js";
 import { defineOp } from "./types.js";
 
@@ -56,12 +57,51 @@ export const auth = defineOp({
       if (value !== undefined) values[envName] = value;
     }
 
+    // Check tokens before storing them. Marvin's own errors for a bad token
+    // surface later and elsewhere ("Invalid access token or user deleted" on an
+    // unrelated command), which is a miserable way to discover you dropped a
+    // character while copying. Both tokens are base64 and end in "=", so a
+    // truncated paste is a genuinely common mistake.
+    const rejected: string[] = [];
+    const checks: Array<Promise<void>> = [];
+    if (args.apiToken !== undefined) {
+      checks.push(
+        verifyToken("api", args.apiToken).then((reason) => {
+          if (reason) rejected.push(`MARVIN_API_TOKEN: ${reason}`);
+        })
+      );
+    }
+    if (args.fullAccessToken !== undefined) {
+      checks.push(
+        verifyToken("fullAccess", args.fullAccessToken).then((reason) => {
+          if (reason) rejected.push(`MARVIN_FULL_ACCESS_TOKEN: ${reason}`);
+        })
+      );
+    }
+    await Promise.all(checks);
+
+    // Refuse rather than persist something known-broken. Saving it and warning
+    // would leave a config that looks configured and is not.
+    if (rejected.length) {
+      throw new Error(
+        `Nothing was saved. Marvin rejected:\n` +
+          rejected.map((r) => `  ${r}`).join("\n") +
+          `\n\nCopy the tokens again from Settings > API ` +
+          `(https://app.amazingmarvin.com/pre?api). They end in "=", which is ` +
+          `easy to miss when selecting by hand.`
+      );
+    }
+
     const path = Object.keys(values).length ? writeConfig(values) : configPath();
     const saved = readConfig();
 
     return {
       path,
       wrote: Object.keys(values).length > 0,
+      verified: [
+        args.apiToken !== undefined && "MARVIN_API_TOKEN",
+        args.fullAccessToken !== undefined && "MARVIN_FULL_ACCESS_TOKEN",
+      ].filter(Boolean) as string[],
       // Never echo the secrets back, not even truncated. This output goes to a
       // terminal that may be shared, logged or screen-shared.
       configured: CREDENTIAL_KEYS.filter((key) => saved[key] !== undefined),
@@ -71,8 +111,11 @@ export const auth = defineOp({
       ),
     };
   },
-  render({ path, wrote, configured, overriddenByEnv }) {
+  render({ path, wrote, verified, configured, overriddenByEnv }) {
     const lines = [wrote ? `saved to ${path}` : `${path}`];
+    if (verified.length) {
+      lines.push(`  checked against Marvin: ${verified.join(", ")} OK`);
+    }
 
     if (configured.length === 0) {
       lines.push("  nothing configured");

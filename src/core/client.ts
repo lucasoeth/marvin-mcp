@@ -30,6 +30,39 @@ export function marvinTimeZoneOffset(): number {
   return -new Date().getTimezoneOffset();
 }
 
+/**
+ * Check one token against `POST /api/test`, which exists for exactly this.
+ *
+ * Deliberately a bare fetch rather than a MarvinClient method: `auth` has to
+ * validate a token before a client can be constructed, and constructing one
+ * requires both tokens to already be present.
+ *
+ * Returns a reason string on failure and null on success, so the caller decides
+ * how loud to be. A network error is not a bad token and must not be reported
+ * as one.
+ */
+export async function verifyToken(
+  kind: "api" | "fullAccess",
+  token: string,
+  baseUrl: string = API_BASE
+): Promise<string | null> {
+  const header = kind === "api" ? "X-API-Token" : "X-Full-Access-Token";
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/test`, {
+      method: "POST",
+      headers: { [header]: token },
+    });
+  } catch (error) {
+    return `could not reach Marvin (${
+      error instanceof Error ? error.message : String(error)
+    })`;
+  }
+  if (response.ok) return null;
+  const body = (await response.text().catch(() => "")).trim();
+  return body || `rejected with HTTP ${response.status}`;
+}
+
 export interface MarvinClientOptions {
   apiToken: string;
   fullAccessToken: string;

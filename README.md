@@ -73,6 +73,10 @@ paste them into a public chat or a GitHub issue.
 marvin auth --api-token PASTE_FIRST_ONE --full-access-token PASTE_SECOND_ONE
 ```
 
+It checks both tokens with Marvin before saving them, so if a paste went wrong
+you'll find out immediately rather than three commands later. The tokens end in
+`=`, which is the character people most often miss when selecting by hand.
+
 That's it. Run `marvin` and you should see today.
 
 Your tokens are saved to `~/.marvin/config.json`, readable only by you. You
