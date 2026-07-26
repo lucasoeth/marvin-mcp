@@ -25,16 +25,16 @@ export function createErrorResponse(operation: string, error: unknown): CallTool
 }
 
 /**
- * Wraps a tool handler with consistent error handling
+ * Wraps a tool handler with consistent error handling.
+ * `operation` names the action for the error message, e.g. "create task"
+ * produces "Failed to create task: ...".
  */
-export async function handleToolExecution<T>(
+export async function handleToolExecution(
   operation: string,
-  handler: () => Promise<T>,
-  formatter: (result: T) => string
+  handler: () => Promise<string>
 ): Promise<CallToolResult> {
   try {
-    const result = await handler();
-    return createSuccessResponse(formatter(result));
+    return createSuccessResponse(await handler());
   } catch (error) {
     return createErrorResponse(operation, error);
   }

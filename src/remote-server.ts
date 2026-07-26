@@ -82,7 +82,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
     origin: ALLOWED_ORIGINS[0] === "*" ? "*" : ALLOWED_ORIGINS,
-    credentials: true,
+    // Browsers reject credentialed requests against a wildcard origin.
+    credentials: ALLOWED_ORIGINS[0] !== "*",
     methods: ["GET", "POST", "OPTIONS", "DELETE"],
     allowedHeaders: [
       "Content-Type",
@@ -100,7 +101,7 @@ app.use(
 app.set("trust proxy", true);
 
 // Request logging middleware
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${req.method} ${req.path} - IP: ${req.ip}`);
   next();
@@ -277,7 +278,8 @@ function createMcpServer(): McpServer {
  * POST /mcp - Main MCP endpoint for requests (with session support for SSE)
  */
 app.post("/mcp", authenticate, async (req, res) => {
-  console.error(`[MCP] Incoming POST request: ${req.method} ${req.url}`);
+  // Log req.path, never req.url: the auth token travels in the query string.
+  console.error(`[MCP] Incoming POST request: ${req.method} ${req.path}`);
 
   try {
     // Check if there's an existing session
@@ -333,7 +335,7 @@ app.post("/mcp", authenticate, async (req, res) => {
  * GET /mcp - SSE endpoint for server-to-client streaming
  */
 app.get("/mcp", authenticate, async (req, res) => {
-  console.error(`[MCP] Incoming GET request (SSE): ${req.url}`);
+  console.error(`[MCP] Incoming GET request (SSE): ${req.path}`);
 
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
@@ -383,7 +385,7 @@ app.delete("/mcp", authenticate, async (req, res) => {
 /**
  * GET /health - Health check endpoint
  */
-app.get("/health", (req, res) => {
+app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
@@ -396,7 +398,7 @@ app.get("/health", (req, res) => {
 /**
  * GET /stats - Statistics endpoint (authenticated)
  */
-app.get("/stats", authenticate, (req, res) => {
+app.get("/stats", authenticate, (_req, res) => {
   res.json({
     mode: "stateful-sse",
     activeSessions: sessions.size,

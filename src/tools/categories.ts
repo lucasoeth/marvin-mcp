@@ -57,8 +57,7 @@ export class CategoryHandlers {
       async () => {
         const categories = await this.marvin.getCategories();
         return formatList(categories, formatCategory, "Organizational Hierarchy (Categories & Projects)", "No items found.");
-      },
-      (result) => result
+      }
     );
   }
 
@@ -68,8 +67,7 @@ export class CategoryHandlers {
       async () => {
         const category = await this.marvin.createCategory(args);
         return formatCategory(category);
-      },
-      (result) => result
+      }
     );
   }
 }

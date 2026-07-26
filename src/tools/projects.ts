@@ -6,7 +6,7 @@ import { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { MarvinAPI } from "../marvin-api.js";
 import { CreateProjectArgs, UpdateProjectArgs } from "../types/tools.js";
 import { validateDate, validateId, validateProjectPriority, assertValid } from "../utils/validation.js";
-import { formatProject, formatList } from "../utils/formatting.js";
+import { formatList } from "../utils/formatting.js";
 import { handleToolExecution } from "../utils/errors.js";
 
 /**
@@ -147,8 +147,7 @@ export class ProjectHandlers {
 
 ID: ${project._id}
 Title: ${project.title}${project.priority ? `\nPriority: ${project.priority}` : ""}`;
-      },
-      (result) => result
+      }
     );
   }
 
@@ -159,8 +158,7 @@ Title: ${project.title}${project.priority ? `\nPriority: ${project.priority}` : 
         assertValid(validateId(projectId), "Project ID is required and must be non-empty");
         const project = await this.marvin.getDocument<Record<string, unknown>>(projectId);
         return `Project details:\n\n${JSON.stringify(project, null, 2)}`;
-      },
-      (result) => result
+      }
     );
   }
 
@@ -189,8 +187,7 @@ Title: ${project.title}${project.priority ? `\nPriority: ${project.priority}` : 
 
         await this.marvin.updateDocument(args.projectId, updates);
         return `Project ${args.projectId} updated successfully!`;
-      },
-      (result) => result
+      }
     );
   }
 
@@ -201,8 +198,7 @@ Title: ${project.title}${project.priority ? `\nPriority: ${project.priority}` : 
         assertValid(validateId(projectId), "Project ID is required and must be non-empty");
         await this.marvin.deleteDocument(projectId);
         return `Project ${projectId} deleted successfully!`;
-      },
-      (result) => result
+      }
     );
   }
 
@@ -218,8 +214,7 @@ Title: ${project.title}${project.priority ? `\nPriority: ${project.priority}` : 
           `Children of ${parentId}`,
           "No items found under this parent."
         );
-      },
-      (result) => result
+      }
     );
   }
 }

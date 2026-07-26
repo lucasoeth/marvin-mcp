@@ -33,8 +33,7 @@ export class AccountHandlers {
       async () => {
         const me = await this.marvin.getMe();
         return `Connection successful!\n\nEmail: ${me.email}${me.name ? `\nName: ${me.name}` : ""}`;
-      },
-      (result) => result
+      }
     );
   }
 }

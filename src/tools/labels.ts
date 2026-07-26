@@ -34,8 +34,7 @@ export class LabelHandlers {
       async () => {
         const labels = await this.marvin.getLabels();
         return formatList(labels, formatLabel, "Labels", "No labels found.");
-      },
-      (result) => result
+      }
     );
   }
 }

@@ -237,9 +237,6 @@ export class MarvinAPI {
   /**
    * Update a document (requires full access)
    */
-  /**
-   * Update a document (requires full access)
-   */
   async updateDocument(
     id: string,
     updates: Record<string, unknown>
@@ -366,10 +363,9 @@ export class MarvinAPI {
         return items.filter(isTask);
       } catch {
         // Final fallback: aggregate from all sources and filter unparented
-        const [today, due, categories] = await Promise.all([
+        const [today, due] = await Promise.all([
           this.getTodayTasks(),
           this.getDueTasks(),
-          this.getCategories(),
         ]);
 
         const allTasks = [...today, ...due];

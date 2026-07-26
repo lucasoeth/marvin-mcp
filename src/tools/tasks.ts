@@ -7,7 +7,7 @@ import { MarvinAPI } from "../marvin-api.js";
 import { CreateTaskArgs, UpdateTaskArgs } from "../types/tools.js";
 import { validateDate, validateId, validatePriority, validateTimeEstimate, assertValid } from "../utils/validation.js";
 import { formatTask, formatList, formatTaskDetails } from "../utils/formatting.js";
-import { handleToolExecution, createSuccessResponse, createErrorResponse } from "../utils/errors.js";
+import { handleToolExecution } from "../utils/errors.js";
 
 /**
  * Tool definitions for task operations
@@ -247,8 +247,7 @@ export class TaskHandlers {
 
 ID: ${task._id}
 Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate ? `\nDue: ${task.dueDate}` : ""}${task.isStarred ? `\nPriority: ${task.isStarred}` : ""}`;
-      },
-      (result) => result
+      }
     );
   }
 
@@ -258,8 +257,7 @@ Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate 
       async () => {
         const tasks = await this.marvin.getTodayTasks();
         return formatList(tasks, formatTask, "Today's tasks", "No tasks scheduled for today.");
-      },
-      (result) => result
+      }
     );
   }
 
@@ -274,8 +272,7 @@ Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate 
           "Overdue tasks",
           "No overdue tasks."
         );
-      },
-      (result) => result
+      }
     );
   }
 
@@ -286,8 +283,7 @@ Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate 
         assertValid(validateId(taskId), "Task ID is required and must be non-empty");
         await this.marvin.completeTask(taskId);
         return `Task ${taskId} marked as complete!`;
-      },
-      (result) => result
+      }
     );
   }
 
@@ -320,8 +316,7 @@ Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate 
 
         await this.marvin.updateDocument(args.taskId, updates);
         return `Task ${args.taskId} updated successfully!`;
-      },
-      (result) => result
+      }
     );
   }
 
@@ -332,8 +327,7 @@ Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate 
         assertValid(validateId(taskId), "Task ID is required and must be non-empty");
         await this.marvin.deleteDocument(taskId);
         return `Task ${taskId} deleted successfully!`;
-      },
-      (result) => result
+      }
     );
   }
 
@@ -344,8 +338,7 @@ Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate 
         assertValid(validateId(taskId), "Task ID is required and must be non-empty");
         const task = await this.marvin.getDocument<any>(taskId);
         return formatTaskDetails(task);
-      },
-      (result) => result
+      }
     );
   }
 
@@ -355,8 +348,7 @@ Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate 
       async () => {
         const tasks = await this.marvin.getInboxTasks();
         return formatList(tasks, formatTask, "Inbox tasks", "No tasks in inbox.");
-      },
-      (result) => result
+      }
     );
   }
 
@@ -367,8 +359,7 @@ Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate 
         assertValid(!!query && query.trim().length > 0, "Search query is required");
         const tasks = await this.marvin.searchTasks(query);
         return formatList(tasks, formatTask, `Tasks matching "${query}"`, `No tasks found matching "${query}".`);
-      },
-      (result) => result
+      }
     );
   }
 
@@ -379,8 +370,7 @@ Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate 
         assertValid(validateDate(date), `Invalid date format: ${date}. Use YYYY-MM-DD`);
         const tasks = await this.marvin.getTasksByDate(date);
         return formatList(tasks, formatTask, `Tasks for ${date}`, `No tasks scheduled for ${date}.`);
-      },
-      (result) => result
+      }
     );
   }
 
@@ -390,8 +380,7 @@ Title: ${task.title}${task.day ? `\nScheduled: ${task.day}` : ""}${task.dueDate 
       async () => {
         const tasks = await this.marvin.getAllTasks();
         return formatList(tasks, formatTask, "All tasks", "No tasks found.");
-      },
-      (result) => result
+      }
     );
   }
 }
