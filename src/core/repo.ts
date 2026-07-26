@@ -13,6 +13,7 @@ import {
   type Label,
   type Task,
   type TaskPatch,
+  UNASSIGNED,
   isTaskDoc,
   isProjectDoc,
   toContainer,
@@ -187,9 +188,22 @@ export class Repo {
   // -------------------------------------------------------------- writes
 
   /**
-   * Create a task. Marvin parses inline syntax (`+today`, `#Category`, `@label`)
-   * out of the title server-side unless X-Auto-Complete is disabled, so plain
-   * text capture needs no client-side parsing.
+   * Create a task, repairing Marvin's inline-`#` handling if it fires.
+   *
+   * Marvin parses inline syntax (`+today`, `#Category`, `@label`) out of the
+   * title server-side. `+today` is genuinely useful and we keep it. `#token` is
+   * not: Marvin strips the token from the title and stores the literal string
+   * as `parentId`, even when no such container exists. "Review PR #412" becomes
+   * "Review PR" filed under `parentId: "#412"`, which is not a real container,
+   * so the task appears in neither the tree crawl nor the inbox.
+   *
+   * Callers resolve `#Category` to a real id first where they can, but that
+   * only helps when the category exists. `#412`, `#1`, `#hashtag` cannot
+   * resolve and are exactly the common case — issue and invoice numbers.
+   *
+   * So: detect the mangling by its signature, a `parentId` beginning with `#`
+   * that the caller did not ask for, and put both fields back. Costs one extra
+   * request, and only when it actually happened.
    */
   async createTask(
     title: string,
@@ -200,7 +214,22 @@ export class Repo {
       timeZoneOffset: marvinTimeZoneOffset(),
       ...toMarvinPatch(patch),
     };
-    return toTask(await this.client.post<Raw>("/addTask", body));
+    const created = toTask(await this.client.post<Raw>("/addTask", body));
+
+    const mangled =
+      created.parentId?.startsWith("#") && created.parentId !== patch.parentId;
+    if (!mangled) return created;
+
+    const intendedParent = patch.parentId ?? UNASSIGNED;
+    await this.updateRaw(created.id, {
+      title,
+      parentId: intendedParent,
+    });
+    return {
+      ...created,
+      title,
+      parentId: intendedParent === UNASSIGNED ? null : intendedParent,
+    };
   }
 
   async markDone(id: string): Promise<void> {

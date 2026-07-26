@@ -7,7 +7,7 @@
  */
 
 /** Marvin uses the literal string "unassigned" where most APIs would use null. */
-const UNASSIGNED = "unassigned";
+export const UNASSIGNED = "unassigned";
 
 export type Salience = 0 | 1 | 2 | 3;
 

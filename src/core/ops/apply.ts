@@ -13,6 +13,7 @@
 import { z } from "zod";
 import { isValidDate, toMarvinPatch, type TaskPatch } from "../model.js";
 import type { Change } from "../journal.js";
+import { resolveInlineParent } from "./capture.js";
 import { defineOp } from "./types.js";
 
 const date = z
@@ -103,10 +104,27 @@ export const apply = defineOp({
           break;
         }
         case "create": {
-          const created = await ctx.repo.createTask(
-            item.title,
-            (item.set ?? {}) as TaskPatch
-          );
+          // Same inline-#Category resolution capture does, and for the same
+          // reason: Marvin strips a `#token` from the title server-side and
+          // stores the literal string as parentId, so "Review PR #412" becomes
+          // "Review PR" filed under a container named "#412" that does not
+          // exist. The task is then reachable by neither the tree crawl nor the
+          // inbox. Going through createTask directly skipped this, which made
+          // `apply` — the path agents are told to prefer — the one that
+          // silently loses tasks. An explicit parentId still wins.
+          const set = (item.set ?? {}) as TaskPatch;
+          let title = item.title;
+          let parentId = set.parentId ?? undefined;
+          if (!parentId) {
+            const resolved = await resolveInlineParent(item.title, ctx);
+            title = resolved.title;
+            parentId = resolved.parentId;
+          }
+
+          const created = await ctx.repo.createTask(title, {
+            ...set,
+            parentId,
+          });
           journalled.push({
             id: created.id,
             before: null,

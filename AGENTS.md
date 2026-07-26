@@ -125,11 +125,23 @@ away.
   wrong day.
 - **`timeEstimate` is milliseconds**, despite reading like minutes. The domain
   layer works in minutes and converts. A raw `30` means 30ms.
-- **Inline `#Category` does not resolve.** Marvin strips the token from the title
-  but stores the literal string as `parentId` (observed: `parentId: "#Admin"`).
-  The task then belongs to no real container and no tree crawl can find it again.
-  `capture` resolves the name to a real id before sending. Inline `+today` is
-  fine and is left to the server.
+- **Inline `#Category` does not resolve, and mangles the title.** Marvin strips
+  the token server-side and stores the literal string as `parentId` (observed:
+  `parentId: "#Admin"`, `parentId: "#412"`). The task then belongs to no real
+  container and no tree crawl can find it again.
+
+  Two layers deal with this and both are needed. `capture` and `apply` resolve a
+  `#Name` to a real container id before sending, which handles the case where
+  the category exists. That does nothing for `#412`, `#1042`, `#99` — issue and
+  invoice numbers, which cannot resolve and are the common case. So
+  `Repo.createTask` also detects the mangling afterwards, by its signature of a
+  returned `parentId` starting with `#` that the caller never asked for, and
+  restores both the title and the intended parent. Costs one extra request, only
+  when it fired.
+
+  Do not "simplify" this by disabling `X-Auto-Complete`: that would also kill
+  inline `+today` / `+tomorrow`, which is genuinely useful and is deliberately
+  left to the server.
 - **`unassigned` is a real sentinel**, used as a value for `day` and `parentId`,
   and as a `parentId` argument to `/children` to read the inbox. It is not null
   and must be mapped at the boundary.
