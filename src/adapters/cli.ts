@@ -67,10 +67,9 @@ function coerce(raw: unknown, prop: JsonSchemaProp, key: string): unknown {
   return raw;
 }
 
-function addOptions(command: Command, op: Op<any, any>, skip?: string) {
+function addOptions(command: Command, op: Op<any, any>) {
   const schema = schemaOf(op);
   for (const [key, prop] of Object.entries(schema.properties ?? {})) {
-    if (key === skip) continue;
     const flag = flagName(key);
     const type = effectiveType(prop);
     const describe = prop.description ?? "";
@@ -164,14 +163,21 @@ export function buildProgram(ctxFactory: () => Ctx = loadCtx): Command {
     const schema = schemaOf(op);
     const positional = op.positional;
     if (positional) {
-      const required = schema.required?.includes(positional);
+      // Optional here even when the schema requires it. The same key is also a
+      // flag (below), so `marvin complete --task x` has to be accepted, and
+      // commander would reject it for a missing `<task>`. zod still enforces
+      // requiredness, with a better message than commander's.
       command.argument(
-        required ? `<${positional}>` : `[${positional}]`,
+        `[${positional}]`,
         schema.properties?.[positional]?.description
       );
     }
 
-    addOptions(command, op, positional);
+    // The positional key gets a flag too. On an op like `tasks`, where every
+    // other filter is a flag, having exactly one of them be positional-only is
+    // a trap: `--query` looks obviously right, and commander answers "unknown
+    // option" rather than pointing at the positional form.
+    addOptions(command, op);
 
     command.action(async (...args: unknown[]) => {
       const opts = (
