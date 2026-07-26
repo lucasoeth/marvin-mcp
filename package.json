@@ -6,8 +6,8 @@
   "type": "module",
   "main": "dist/bin/marvin.js",
   "bin": {
-    "marvin": "./dist/bin/marvin.js",
-    "marvin-mcp": "./dist/bin/marvin-mcp.js"
+    "marvin": "dist/bin/marvin.js",
+    "marvin-mcp": "dist/bin/marvin-mcp.js"
   },
   "files": [
     "dist",
