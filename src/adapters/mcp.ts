@@ -74,10 +74,27 @@ export async function callOp(
 
   try {
     const output = await op.run(parsed.data, ctx);
-    return {
-      content: [{ type: "text", text: op.render(output) }],
-      structuredContent: output as Record<string, unknown>,
-    };
+    // Text only, deliberately. Returning structuredContent alongside it does
+    // not mean "both are available" — clients pick one and discard the other,
+    // and they disagree about which.
+    //
+    // Claude Code 2.1.220 filters every text block out of the result when
+    // structuredContent is present and hands the model JSON.stringify of it
+    // instead (anthropics/claude-code#55677, #45575). VS Code does the same.
+    // Claude Desktop and Cursor do the opposite: they read content and ignore
+    // structuredContent entirely. So shipping both meant Claude Code users
+    // never saw a single render() in this codebase, and paid 3.6x the tokens
+    // for the privilege — a measured 2,504 against 695 for one search.
+    //
+    // The spec asks for the *serialized JSON* in the text block, not a separate
+    // human rendering, and SEP-1624 requires the two payloads to be
+    // semantically equivalent. Ours were not. Every render carries the full
+    // task ids the model needs to act, so text alone is sufficient and is now
+    // what every client gets.
+    //
+    // Do not add outputSchema: declaring one makes structuredContent mandatory
+    // and turns its absence into a hard client-side error.
+    return { content: [{ type: "text", text: op.render(output) }] };
   } catch (error) {
     if (error instanceof MarvinError) return errorResult(error.message);
     return errorResult(

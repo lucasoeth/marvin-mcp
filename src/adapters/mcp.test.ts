@@ -58,6 +58,34 @@ describe("tool annotations", () => {
   });
 });
 
+describe("result shape", () => {
+  it("returns text only, never structuredContent", async () => {
+    // Clients disagree about which field wins and discard the other. Claude
+    // Code and VS Code drop the text and show the model stringified JSON;
+    // Claude Desktop and Cursor ignore structuredContent. Emitting both meant
+    // half of all clients never saw a render(). See callOp for the detail.
+    const stub = {
+      repo: { today: async () => [], due: async () => [] },
+      journal: {},
+      now: () => new Date("2026-07-26T12:00:00Z"),
+    } as unknown as Ctx;
+
+    const result = await callOp("marvin_brief", {}, stub);
+    expect(result.structuredContent).toBeUndefined();
+    expect(result.content[0].type).toBe("text");
+    expect(typeof result.content[0].text).toBe("string");
+  });
+
+  it("declares no outputSchema, which would make structuredContent mandatory", () => {
+    for (const tool of tools) {
+      expect(
+        (tool as { outputSchema?: unknown }).outputSchema,
+        `${tool.name} must not declare an outputSchema`
+      ).toBeUndefined();
+    }
+  });
+});
+
 describe("server instructions", () => {
   it("explains both date fields, which is the whole reason it exists", () => {
     expect(SERVER_INSTRUCTIONS).toContain("scheduledFor");
