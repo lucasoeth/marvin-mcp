@@ -79,13 +79,13 @@ export const brief = defineOp({
         .reduce((sum, t) => sum + (t.estimate ?? 0), 0),
     } satisfies Brief;
   },
+  /**
+   * Today leads. Overdue follows, and past a couple of weeks it collapses to a
+   * count rather than a list — a backlog you can scroll is a chore, a number is
+   * a fact. `find` will list them if you actually want them.
+   */
   render(brief) {
     const lines: string[] = [`${brief.date}`];
-
-    if (brief.overdue.length) {
-      lines.push("", `Overdue (${brief.overdue.length})`);
-      lines.push(...brief.overdue.map((t) => "  " + formatTask(t, brief.date)));
-    }
 
     lines.push("", `Today (${brief.today.length})`);
     if (brief.today.length === 0) {
@@ -107,6 +107,23 @@ export const brief = defineOp({
       );
     }
 
+    if (brief.overdue.length) {
+      const cutoff = addDays(brief.date, -STALE_AFTER_DAYS);
+      const recent = brief.overdue.filter((t) => (t.dueBy ?? "") >= cutoff);
+      const stale = brief.overdue.length - recent.length;
+
+      if (recent.length) {
+        lines.push("", `Overdue (${recent.length})`);
+        lines.push(...recent.map((t) => "  " + formatTask(t, brief.date)));
+      }
+      if (stale) {
+        lines.push(
+          "",
+          `${stale} older than ${STALE_AFTER_DAYS} days, not listed`
+        );
+      }
+    }
+
     if (brief.completedToday.length) {
       lines.push("", `Done today: ${brief.completedToday.length}`);
     }
@@ -114,6 +131,12 @@ export const brief = defineOp({
     return lines.join("\n");
   },
 });
+
+/**
+ * Deadlines older than this are counted, not enumerated. Nothing is hidden from
+ * `--json`; this only affects what the human rendering leads with.
+ */
+const STALE_AFTER_DAYS = 14;
 
 /** Frog first, then priority, then nearest deadline. */
 function byUrgency(a: Task, b: Task): number {
