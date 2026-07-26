@@ -145,7 +145,7 @@ marvin tasks "invoice"                    # search everything
 marvin tasks --parent inbox               # your inbox
 marvin tasks --unscheduled                # captured, never given a day
 marvin hierarchy                          # your projects and categories
-marvin apply --changes '[...]' --dry-run  # preview a batch before writing it
+marvin apply --changes '[...]'            # a batch of changes in one go
 ```
 
 `marvin complete` accepts part of a title, so you don't have to look anything up.
@@ -172,22 +172,9 @@ There's no undo. A write goes straight to Marvin, and Marvin has no undo either,
 so a deletion in particular is permanent — recreating a task gives it a new id.
 Prefer completing or rescheduling a task over deleting it.
 
-Before committing a big batch, preview it:
-
-```bash
-marvin apply --changes '[...]' --dry-run
-```
-
-That resolves every id and prints what would actually happen — the task's real
-title, the current value beside the new one, and an error for any id that
-doesn't exist. It writes nothing.
-
-```
-would apply 3 change(s)
-  update   "Buy shoes"  scheduledFor: 2026-01-02 → 2026-07-27
-  delete   "call the plumber"  (for 2026-04-12, has a note)  — permanent
-  ERROR    8c1e4f2a: no such task
-```
+Prefer one `apply` over a sequence of single writes: it is one ordered set,
+applied in order, and one round trip instead of twelve against an account with
+a daily request allowance.
 
 Add `--json` to any command if you want to pipe the output into something else.
 

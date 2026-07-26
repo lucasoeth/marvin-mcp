@@ -51,19 +51,21 @@ immediately, Marvin itself cannot revert it, and a deletion is permanent because
 Marvin reissues ids on recreate. Prefer completing or rescheduling over
 deleting.
 
-What stands in for a safety net: MCP clients see every writing tool annotated
-`destructiveHint`, so they ask the user before the call runs, and on the CLI
-`apply --dry-run` resolves the change set against the account and prints it —
-task titles, each field's current value next to the proposed one, what a delete
-would destroy, and an explicit error for any id that does not exist. One sync
-query for the whole set, so the preview is free and costs less than the write.
+What stands in for a safety net: every writing tool is annotated
+`destructiveHint`, so an MCP client shows the call and waits for the user
+before it runs — and the CLI is in practice driven the same way, by an agent
+whose shell commands the user approves one at a time.
 
-That resolution is the point. A dry run that reformats the arguments you just
-typed confirms nothing; this one is the only check a CLI write gets.
+There is no preview mode, deliberately. `apply --dry-run` existed, was for a
+while a pure restatement of the caller's own arguments, was then fixed to
+resolve ids properly, and was removed anyway: by the time a change set runs,
+whoever approved it has already seen it. A second pass telling the caller what
+the caller just asked for is a step, not a check. Do not add it back without a
+reader who has not already seen the request.
 
 Prefer `apply` over a sequence of individual writes. It is one ordered set the
 user can review in one go, and one round trip rather than twelve against a
-rate-limited account. Use `--dry-run` first for anything you did not hand-verify.
+rate-limited account.
 
 ## Working on the code
 
